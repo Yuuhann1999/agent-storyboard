@@ -1,6 +1,6 @@
 {
   "name": "codex-storyboard",
-  "version": "0.6.7+codex.20260914224348",
+  "version": "0.6.8+codex.20260914230641",
   "description": "Start the local storyboard app, create and manage projects, plan B-roll motion with a confirmation gate, process image and video generation tasks, and return assets to Codex Storyboard.",
   "author": {
     "name": "Yuuhann"

@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { expireTasks } from "./task-state.mjs";
 import { inspectEnvironment } from "./runtime.mjs";
 import { generateVoice, alignVoice } from "./audio.mjs";
-import { spokenText, dialogueKey, applyTiming } from "./timing.mjs";
+import { spokenText, dialogueKey, applyTiming, voiceTextsMatch } from "./timing.mjs";
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import {
@@ -1417,7 +1417,7 @@ async function handleApi(request, response, url) {
         return sendJson(response, 200, await saveProject(project));
       }
       if (!spokenText(project.shots)) return sendError(response, 409, "当前项目没有带台词的镜头，无法进行对齐");
-      if (projectVoiceText(project) !== take.text) return sendError(response, 409, "当前镜头台词与此配音文本不同，请重新生成配音后对齐");
+      if (!voiceTextsMatch(projectVoiceText(project), take.text)) return sendError(response, 409, "当前镜头台词与此配音文本不同，请重新生成配音后对齐");
       audioJobs.add(projectId);
       project.audio.status = "aligning";
       project.audio.error = "";
@@ -1500,7 +1500,7 @@ async function handleApi(request, response, url) {
     return sendJson(response, 200, {
       ok: true,
       app: "codex-storyboard",
-      version: "0.6.7",
+      version: "0.6.8",
       dataDir,
       publicDir
     });

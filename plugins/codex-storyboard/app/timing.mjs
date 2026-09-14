@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 export const spokenText = shots => shots.map(s => s.dialogue.trim()).filter(Boolean).join("\n");
 export const dialogueKey = shots => createHash("sha256").update(JSON.stringify(shots.map(s => [s.id, s.dialogue]))).digest("hex");
+export const voiceTextsMatch = (left, right) => String(left).normalize("NFKC").replace(/\s+/gu, "") === String(right).normalize("NFKC").replace(/\s+/gu, "");
 export function estimateTiming(shots, totalMs, log = "") {
   if (!(totalMs > 0)) throw new Error("无有效音频时长");
   const boundaries = [...log.matchAll(/silence_start:\s*([\d.]+)/g)].map(m => Math.round(Number(m[1]) * 1000)).filter(n => n > 0 && n < totalMs);
