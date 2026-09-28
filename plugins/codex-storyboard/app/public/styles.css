@@ -109,7 +109,8 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  z-index: var(--z-sticky);
+  /* Above sticky table headers so the project menu popover isn't covered. */
+  z-index: var(--z-dropdown);
   min-height: 56px;
   display: flex;
   align-items: center;
@@ -1863,6 +1864,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 .presenter-stage {
   min-height: 0;
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   padding: 24px 100px;
 }
