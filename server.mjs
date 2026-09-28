@@ -32,6 +32,12 @@ const projectsFile = join(dataDir, "projects.json");
 const legacyDataFile = join(dataDir, "storyboard.json");
 const legacyMediaDir = join(dataDir, "media");
 const port = Number(args.port || process.env.PORT || process.env.CODEX_STORYBOARD_PORT || 43218);
+const apiToken = process.env.CODEX_STORYBOARD_API_TOKEN || "";
+function isAuthorizedRequest(request) {
+  if (!apiToken) return false;
+  const header = request.headers["authorization"] || "";
+  return header === `Bearer ${apiToken}`;
+}
 let generationMutationQueue = Promise.resolve();
 let apiQueue = Promise.resolve();
 const audioJobs = new Set();
@@ -1518,7 +1524,10 @@ const server = createServer(async (request, response) => {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
     if (!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) return sendError(response, 403, "Local host required");
     if (request.headers.origin && request.headers.origin !== url.origin) return sendError(response, 403, "Cross-origin requests are not allowed");
-    if (url.pathname.startsWith("/api/")) return await serializeApi(() => handleApi(request, response, url));
+    if (url.pathname.startsWith("/api/")) {
+      if (!isAuthorizedRequest(request)) return sendJson(response, 401, { error: "unauthorized" });
+      return await serializeApi(() => handleApi(request, response, url));
+    }
 
     const mediaMatch = url.pathname.match(/^\/media\/([^/]+)\/([^/]+)$/);
     if (mediaMatch) {
