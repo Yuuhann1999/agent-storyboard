@@ -1,370 +1,334 @@
-<p align="center">
-  <img src="docs/assets/codex-storyboard-cover.png" alt="Codex Storyboard 顶部主视觉" width="900">
-</p>
+<div align="center">
 
-<h1 align="center">Codex Storyboard / Codex 分镜台</h1>
+<img src="docs/assets/agent-storyboard-cover.png" alt="Agent 分镜台" width="100%">
 
-<p align="center">
-  安装插件后，Codex 可以直接启动本地分镜台、创建视频项目、生成图片/视频素材，并自动回填到分镜表。
-</p>
+<h1>Agent 分镜台 · Agent Storyboard</h1>
 
-<p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
+<p><b>让 Codex、Claude Code 帮你把视频从想法做到分镜、素材和配音。</b><br>
+一个本地优先的分镜工作台：Agent 负责写和生成，你在一张表里检查、调整、验收。</p>
+
+<p>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-22c55e.svg" alt="MIT"></a>
   <img src="https://img.shields.io/badge/Codex-Plugin-111827" alt="Codex Plugin">
+  <img src="https://img.shields.io/badge/Claude%20Code-Plugin-d97757" alt="Claude Code Plugin">
   <img src="https://img.shields.io/badge/MCP-Ready-0ea5e9" alt="MCP Ready">
   <img src="https://img.shields.io/badge/Node.js-18%2B-339933" alt="Node.js 18+">
-  <img src="https://img.shields.io/badge/Local--first-Yes-blue" alt="Local first">
+  <img src="https://img.shields.io/badge/Local--first-Yes-2563eb" alt="Local first">
 </p>
 
-<p align="center">
-  <a href="#快速开始">快速开始</a> ·
-  <a href="#使用流程">使用流程</a> ·
-  <a href="#界面展示">界面展示</a> ·
-  <a href="#核心能力">核心能力</a> ·
-  <a href="#designmd-视觉规范">DESIGN.md</a> ·
-  <a href="#开发">开发</a> ·
-  <a href="#隐私说明">隐私说明</a>
+<p>
+  <a href="#-快速开始">快速开始</a> ·
+  <a href="#-它是怎么工作的">工作方式</a> ·
+  <a href="#-功能一览">功能</a> ·
+  <a href="#-环境与依赖">环境</a> ·
+  <a href="#-mcp-工具">MCP 工具</a> ·
+  <a href="#-开发">开发</a>
 </p>
+
+</div>
 
 ---
 
-## 这是什么？
+## 为什么做它
 
-Codex Storyboard 是一个面向短视频和自媒体创作的本地分镜工作台。
+做一条短视频，脚本在文档里，分镜在表格里，图片在生图网页里，配音在另一个工具里，素材散落在文件夹里。每换一个窗口，上下文就丢一次。
 
-你可以直接让 Codex 创建一个完整视频项目：镜头、台词、画面描述、A-ROLL / B-ROLL、时长、素材类型和生成方式都会写进本地分镜表。之后 Codex 还可以继续调用 Image Generation、HyperFrames 或 Remotion 生成图片 / 视频素材，并把结果回填到对应镜头。
+Agent 分镜台把这些收进同一张**本地分镜表**：
 
-可以把它理解成：
+- **Agent 直接写入**：一句话让 Agent 建好完整项目，不需要控制浏览器。
+- **结果自动回填**：Agent 生成的图片、视频和配音，落进对应镜头，不用手动对文件名。
+- **你只做验收**：所有自动化结果都在表格里，能一眼看到、直接改。
+- **数据都在本机**：项目、脚本和素材保存在你的电脑上。
 
-```text
-Codex 里的视频脚本 + 分镜表 + 素材生成台。
-```
+<div align="center">
+  <img src="docs/assets/demo-fill.gif" alt="素材生成后自动回填到分镜表" width="86%">
+  <br><sub>Agent 生成素材，结果自动回填到对应镜头</sub>
+</div>
 
-普通用户不需要理解 MCP、本地 API 或文件路径。安装插件后，说一句“打开分镜台”或“帮我创建一个分镜项目”就能开始。
+## 🚀 快速开始
 
-## 快速开始
+需要 Node.js 18 或更高版本，以及 Codex 或 Claude Code 之一。
 
-### 1. 安装插件
+**1. 安装插件**
 
-需要：
+<table>
+<tr>
+<td width="50%" valign="top">
 
-- 支持插件的 Codex
-- 本机可用的 Node.js 18 或更高版本
+**Codex**
 
 ```bash
-codex plugin marketplace add Yuuhann1999/codex-storyboard
-codex plugin add codex-storyboard@codex-storyboard
+codex plugin marketplace add Yuuhann1999/agent-storyboard
+codex plugin add agent-storyboard@agent-storyboard
 ```
 
-安装后重启 Codex，或新开一个对话，让插件和 MCP 工具重新加载。
+</td>
+<td width="50%" valign="top">
 
-### 2. 打开分镜台
+**Claude Code**
 
-在 Codex 中输入：
+```bash
+claude plugin marketplace add Yuuhann1999/agent-storyboard
+claude plugin install agent-storyboard@agent-storyboard
+```
+
+</td>
+</tr>
+</table>
+
+安装后新开一个对话，让 MCP 工具重新加载（Claude Code 里可以用 `/mcp` 确认 `agent-storyboard` 已连接）。
+
+**2. 打开分镜台**
 
 ```text
-@codex-storyboard 打开 Codex 分镜台。
+打开 Agent 分镜台。
 ```
 
-插件会自动启动内置本地工作台，并返回类似这样的链接：
+插件会自动启动内置的本地工作台，并给出链接（默认 `http://127.0.0.1:43218`），在侧边栏或浏览器里打开即可。
+
+**3. 创建第一个项目**
 
 ```text
-http://127.0.0.1:43218
+创建一个 9:16 的短视频分镜项目，主题是“独居第三年，我把 20㎡ 出租屋改成了工作室”，
+风格干净、节奏快，适合抖音。写好台词和画面描述。
 ```
 
-点击链接即可在 Codex 侧边栏打开。
+**4. 生成素材**
 
-### 3. 创建第一个项目
+在分镜台里点镜头的「生成素材」，或点顶栏的「批量生成」，然后对 Agent 说：
 
 ```text
-@codex-storyboard 创建一个 9:16 的短视频分镜项目，主题是“Codex 侧边栏的 5 种用法”，风格干净、节奏快，适合抖音。
+处理 Agent 分镜台里所有待生成素材。
 ```
 
-项目创建后，打开分镜台刷新即可看到完整项目和镜头表。
-
-> 如果 Codex 当前会话没有暴露 `create_storyboard_project`、`list_storyboard_projects`、`open_storyboard` 等 Storyboard MCP 工具，请新开一个 Codex 对话或重启 Codex 后再试。插件安装后，旧会话不一定会自动重新加载工具能力。
-
-### 4. 生成素材
-
-在分镜台里点击单个镜头的“生成素材”，或点击“批量生成”。然后让 Codex 处理队列：
-
-```text
-@codex-storyboard 处理 Codex 分镜台里所有待生成素材。
-```
-
-> Image Generation、HyperFrames 和 Remotion 是否可用，取决于当前 Codex 环境中是否已启用对应能力或插件。
-
-## 使用流程
+## 🧭 它是怎么工作的
 
 ```mermaid
 flowchart LR
-  A["告诉 Codex<br/>视频主题和要求"] --> B["Codex 创建<br/>本地分镜项目"]
-  B --> C["打开 Codex 分镜台<br/>检查脚本和镜头"]
-  C --> D["导入 DESIGN.md<br/>统一视觉风格"]
-  D --> E["单镜头或批量<br/>加入生成队列"]
-  E --> F["Codex 生成图片/视频<br/>Image Generation / HyperFrames / Remotion"]
-  F --> G["素材自动回填<br/>到对应镜头"]
-  G --> C
+  A["你：视频主题和要求"] --> B["Agent 通过 MCP<br/>写入完整分镜项目"]
+  B --> C["你在分镜表里<br/>检查、调整"]
+  C --> D["加入生成队列<br/>单镜头 / 批量"]
+  D --> E["Agent 生成<br/>图片 · 动效视频 · 配音"]
+  E --> F["素材自动回填<br/>到对应镜头"]
+  F --> C
 ```
 
-一分钟日常用法：
+分镜台是一个本地网页服务，Agent 通过 MCP 工具和它对话。三种生成方式按镜头选择：
 
-1. 在 Codex 里说清楚视频主题、目标平台、时长和风格。
-2. 让 `@codex-storyboard` 创建项目。
-3. 打开本地分镜台，检查台词、画面描述和镜头时长。
-4. 需要统一视觉风格时，导入项目级 `DESIGN.md`。
-5. 点击“生成素材”或“批量生成”。
-6. 让 Codex 处理生成队列，图片 / 视频素材会自动回填。
+| 生成方式 | 做什么 | 由谁完成 |
+| --- | --- | --- |
+| **AI 生图** | 按画面描述生成图片 | Codex 用自带的 image_gen；Claude Code 通过 `generate_storyboard_image` 调用本机 Codex 出图 |
+| **HyperFrames / Remotion 动效** | 用代码渲染字幕、信息图、转场等视频 | Agent 在本地渲染（需要对应插件和渲染工具链） |
+| **手动素材** | 自己拍的、自己剪的 | 你上传图片或视频 |
 
-## 界面展示
+## ✨ 功能一览
 
-### Codex 对话与分镜台联动
+### 一张表看完整个分镜
 
-![Codex Storyboard 与 Codex 对话联动](docs/assets/hero-codex-storyboard.png)
+镜头类型、媒体、时长、台词、画面描述、生成方式、素材预览和备注都在同一行。长项目切到「紧凑」，一屏看更多镜头；节奏有问题的镜头会直接标出提示。
 
-### 多项目管理
+<table>
+<tr>
+<td width="50%"><img src="docs/assets/table.png" alt="分镜表：详细视图"><br><sub>详细视图</sub></td>
+<td width="50%"><img src="docs/assets/table-compact.png" alt="分镜表：紧凑视图"><br><sub>紧凑视图，一屏 7 个镜头</sub></td>
+</tr>
+</table>
 
-![Codex Storyboard 项目管理](docs/assets/projects.png)
+- 拖拽或 `Alt + ↑/↓` 调整顺序，复制镜头、在下方插入，误删可以撤销。
+- 素材文件名带镜头序号，调整顺序后会自动同步，不会互相覆盖。
+- 按台词、画面、备注搜索；顶栏实时显示「生成中 / 排队 / 失败」数量，点一下定位。
 
-### 新建项目与画面比例
+### 口播配音，和台词对齐
 
-![Codex Storyboard 新建项目](docs/assets/create-project.png)
+在脚本页生成配音，可以描述声音风格，也可以上传参考音频克隆音色。生成后用本地 Whisper 识别，把配音对齐到每个镜头的台词，再一键应用镜头时长。
 
-### 分镜工作台
+<div align="center"><img src="docs/assets/script-voice.png" alt="脚本与口播配音" width="88%"></div>
 
-![Codex Storyboard 分镜工作台](docs/assets/workspace-table.png)
+### 素材总览与封面工作台
 
-### 素材生成与回填
+只列做出来的素材，一眼看到进度。封面按竖屏 9:16 和横屏 16:9 分别管理，支持模板、参考图和提示词。
 
-![Codex Storyboard 素材生成回填](docs/assets/generated-assets.png)
+<table>
+<tr>
+<td width="50%"><img src="docs/assets/assets.png" alt="素材总览"><br><sub>素材总览</sub></td>
+<td width="50%"><img src="docs/assets/cover.png" alt="封面工作台"><br><sub>封面工作台</sub></td>
+</tr>
+</table>
 
-## 核心能力
+### 风格库与 DESIGN.md
 
-| 能力 | 说明 |
+12 种内置视觉风格，选中后写入项目的 `DESIGN.md`。之后所有图片和视频素材都会遵循这份视觉规范，单个镜头的明确要求优先。
+
+<div align="center"><img src="docs/assets/styles.png" alt="风格库" width="88%"></div>
+
+### 深色模式，也适合窄窗口
+
+跟随你的习惯切换主题。放进 Agent 的侧边栏这类窄窗口时，分镜表会自动变成卡片布局。
+
+<table>
+<tr>
+<td width="66%"><img src="docs/assets/table-dark.png" alt="深色模式"></td>
+<td width="34%"><img src="docs/assets/sidebar.png" alt="窄窗口卡片布局"></td>
+</tr>
+</table>
+
+### 更多
+
+| | |
 | --- | --- |
-| 插件自带工作台 | 安装 Codex 插件后可直接启动本地分镜台，不需要单独 clone 项目。 |
-| 多项目管理 | 新建、重命名、打开和删除不同视频项目。 |
-| Codex 一键建项目 | 通过 MCP 直接写入项目和分镜，不需要控制浏览器。 |
-| 分镜表格 | 管理镜头类型、媒体类型、时长、台词文案、画面描述、生成方式、素材预览和备注。 |
-| 素材生成队列 | 支持单镜头生成和批量生成，生成完成后自动回填。 |
-| 多种生成方式 | 按镜头选择手动素材、Image Generation、HyperFrames 或 Remotion。 |
-| 本地素材上传 | 手动上传图片 / 视频，支持放大预览、替换和删除。 |
-| 项目级 DESIGN.md | 每个项目可选导入视觉规范，用于统一图片和视频素材风格。 |
-| 多画面比例 | 支持 `9:16`、`16:9`、`3:4`、`4:3`、`1:1`。 |
-| 本地优先 | 项目、脚本和素材默认保存在本机。 |
+| 多项目管理 | 新建、重命名、复制、搜索和删除项目 |
+| 多画面比例 | `9:16`、`16:9`、`3:4`、`4:3`、`1:1` |
+| 演示模式 | 逐镜头全屏预览，检查节奏 |
+| 导出 | Markdown、HTML、Word、纯文本 |
+| 本地素材 | 上传图片 / 视频，放大预览、替换和删除 |
 
-## 常用提示词
+## 🔧 环境与依赖
 
-打开分镜台：
+不需要 Python。设置里的「环境检查」只列真正需要关心的项目：
+
+<table>
+<tr>
+<td width="55%" valign="top">
+
+| 项目 | 用途 | 缺少时 |
+| --- | --- | --- |
+| 配音服务 | VoxCPM 在线服务（纯 Node 调用） | 需要联网 |
+| FFmpeg | 配音转码、时长读取 | `brew install ffmpeg` |
+| Whisper | 把配音对齐到台词 | 没有它仍可生成配音；`brew install whisper-cpp` |
+| Codex CLI | 让 Claude Code 通过 Codex 生图 | 可选，也可用 Agent 自带生图或手动上传 |
+
+</td>
+<td width="45%" valign="top"><img src="docs/assets/environment.png" alt="环境检查"></td>
+</tr>
+</table>
+
+<details>
+<summary>环境变量</summary>
+
+旧版的 `CODEX_STORYBOARD_*` 仍然有效，新变量优先。
 
 ```text
-@codex-storyboard 打开 Codex 分镜台。
+AGENT_STORYBOARD_DATA_DIR      数据目录
+AGENT_STORYBOARD_PORT          端口，默认 43218
+AGENT_STORYBOARD_FFMPEG        FFmpeg 路径（同理 _FFPROBE、_WHISPER、_WHISPER_MODEL）
+AGENT_STORYBOARD_VOXCPM_URL    自建配音服务地址
+AGENT_STORYBOARD_CODEX         Codex CLI 路径
 ```
 
-创建项目：
+</details>
+
+## 🧰 MCP 工具
+
+Agent 通过这些工具工作，不需要控制浏览器，也不会直接改数据文件。
+
+| 工具 | 作用 |
+| --- | --- |
+| `open_storyboard` | 启动或连接本地分镜台，返回链接 |
+| `create_storyboard_project` | 一次性创建完整项目、全部镜头和可选 `DESIGN.md` |
+| `list_storyboard_projects` / `get_storyboard_project` | 查找项目、读取完整镜头 |
+| `update_storyboard_project` / `delete_storyboard_project` | 修改镜头、比例、视觉规范；删除项目 |
+| `list_storyboard_generation_tasks` | 读取待处理的生成任务 |
+| `generate_storyboard_image` | 一次调用完成：认领任务、通过 Codex 出图、校验、回填 |
+| `claim_…` / `complete_…` / `fail_…` / `heartbeat_storyboard_generation_task` | 处理动效视频等长任务 |
+| `plan_broll_motion` | B-roll 动效的方案确认关口 |
+| `manage_storyboard_audio` | 生成配音、选择版本、对齐台词、应用镜头时长 |
+| `inspect_storyboard_environment` | 检查配音、FFmpeg、Whisper 和本机 Agent |
+
+<details>
+<summary>常用提示词</summary>
 
 ```text
-@codex-storyboard 创建一个 9:16 的“AI 工具使用技巧”短视频分镜项目，直接写入 Codex 分镜台。
+打开 Agent 分镜台。
+创建一个 9:16 的“AI 工具使用技巧”短视频分镜项目，直接写入分镜台。
+帮我把这个项目补成 8 个镜头，每个镜头写出台词、画面描述、时长和生成方式。
+处理所有待生成素材。优先生成 AI 生图，再生成动效视频。
+查看当前有哪些分镜项目，找到标题里包含“AI 工具”的项目。
 ```
 
-补充分镜：
+</details>
+
+## 🔒 数据与隐私
+
+- 项目、脚本和素材保存在本机，默认目录 `~/.agent-storyboard/`。用过旧版的话，已有的 `~/.codex-storyboard/` 会继续沿用，不会搬动或丢失。
+- 本地服务只监听 `127.0.0.1`，并拒绝跨域请求。
+- 配音会把台词发送到 VoxCPM 在线服务；通过 Codex 生图时，提示词会发送到 ChatGPT 的图片服务。请注意对应服务的隐私条款。
 
 ```text
-@codex-storyboard 帮我把这个项目补成 8 个镜头，每个镜头都写出台词、画面描述、时长和生成方式。
-```
-
-生成素材：
-
-```text
-@codex-storyboard 处理所有待生成素材。优先生成 Image Generation 图片，再生成 HyperFrames 和 Remotion 视频。
-```
-
-查找项目：
-
-```text
-@codex-storyboard 查看当前有哪些分镜项目，帮我找到标题里包含“AI 工具”的项目。
-```
-
-## DESIGN.md 视觉规范
-
-新建项目时可以选择导入一个 Markdown 文件作为视觉规范。进入项目后，也可以通过右上角“视觉规范”菜单查看、替换或移除。
-
-导入后，文件统一保存为：
-
-```text
-<数据目录>/projects/<project-id>/DESIGN.md
-```
-
-生成素材时：
-
-- 分镜里的“画面描述 / 生成提示词”决定当前镜头具体内容。
-- `DESIGN.md` 统一约束视觉风格、色彩、构图、字体、质感和运动语言。
-- 当前镜头的明确要求与通用规范冲突时，以当前镜头要求为准。
-- HyperFrames 和 Remotion 的工程及中间文件保存在项目对应的 `generation/` 目录。
-
-## 本地数据
-
-插件模式默认数据目录：
-
-```text
-~/.codex-storyboard/
+~/.agent-storyboard/
   projects.json
-  projects/
-    <project-id>/
-      project.json
-      DESIGN.md
-      media/
-      generation/
+  projects/<project-id>/
+    project.json  DESIGN.md  media/  generation/
 ```
 
-开发模式 `npm start` 默认使用仓库内：
-
-```text
-data/
-```
-
-可以用环境变量自定义插件数据目录：
+## 🛠 开发
 
 ```bash
-CODEX_STORYBOARD_DATA_DIR=/path/to/data
+git clone https://github.com/Yuuhann1999/agent-storyboard.git
+cd agent-storyboard
+npm start            # http://127.0.0.1:43218，数据在仓库内 ./data
+npm run check        # 语法检查
+npm test             # 单元与集成测试
 ```
 
-## Codex 插件工作流
+网页使用原生 HTML、CSS 和 JavaScript，本地服务只用 Node.js 标准库，没有运行时 npm 依赖。
 
-插件通过 MCP 启动内置本地工作台，并调用本地 API。它不直接写项目 JSON，也不使用浏览器自动化强行打开页面。
-
-支持：
-
-- 启动或连接本地 Codex 分镜台，并返回可点击链接。
-- 列出项目，并按标题查找。
-- 读取单个项目和完整镜头。
-- 一次创建项目、全部镜头和可选 `DESIGN.md`。
-- 修改项目名称、比例和指定镜头。
-- 追加或删除镜头。
-- 替换或移除 `DESIGN.md`。
-- 读取待处理生成任务。
-- 将生成完成的图片 / 视频回填到正确镜头。
-- 永久删除项目及其本地素材。
-
-为了减少 Token 消耗，创建工具默认只返回项目摘要，不会把完整脚本文案在工具结果中重复输出。
-
-## 本地素材
-
-“手动素材”镜头支持：
-
-- 点击空素材框上传。
-- 使用“本地上传”按钮上传。
-- 点击已有素材放大查看。
-- 删除已上传或已生成的素材。
-- 重新上传或重新生成。
-
-支持格式：
-
-- 图片：PNG、JPEG、WebP、GIF
-- 视频：MP4、WebM、MOV
-- 单文件最大 100MB
-
-## 开发
-
-如果你要修改工作台源码，可以 clone 仓库后直接启动根目录项目：
-
-```bash
-git clone https://github.com/Yuuhann1999/codex-storyboard.git
-cd codex-storyboard
-npm start
-```
-
-打开：
-
-```text
-http://127.0.0.1:43218
-```
-
-开发检查：
-
-```bash
-npm run check
-```
-
-验证插件：
-
-```bash
-python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py \
-  plugins/codex-storyboard
-```
-
-本地调试插件：
-
-```bash
-codex plugin marketplace add .
-codex plugin add codex-storyboard@codex-storyboard
-```
-
-插件源码结构：
-
-```text
-plugins/codex-storyboard/
-├── .codex-plugin/plugin.json
-├── .mcp.json
-├── app/
-│   ├── server.mjs
-│   └── public/
-├── mcp/server.mjs
-├── scripts/start-mcp.sh
-└── skills/
-    ├── manage-storyboard-projects/SKILL.md
-    └── process-storyboard-tasks/SKILL.md
-```
-
-项目结构：
+<details>
+<summary>项目结构</summary>
 
 ```text
 .
-├── .agents/plugins/marketplace.json
-├── plugins/codex-storyboard/
-├── public/
-├── docs/assets/
-├── server.mjs
-├── package.json
-└── README.md
+├── server.mjs                      本地服务（项目、生成任务、配音 API）
+├── public/                         前端
+├── voxcpm.mjs                      配音在线服务客户端
+├── codex-image.mjs                 通过 Codex CLI 出图的桥接
+├── runtime.mjs / audio.mjs         环境检查、FFmpeg / Whisper 调用
+├── plugins/agent-storyboard/
+│   ├── .codex-plugin/              Codex 清单
+│   ├── .claude-plugin/             Claude Code 清单
+│   ├── .mcp.codex.json             Codex 的 MCP 启动配置
+│   ├── mcp/server.mjs              MCP 服务
+│   ├── skills/                     Agent 使用说明
+│   └── app/                        随插件打包的服务和前端副本
+├── .agents/plugins/marketplace.json    Codex marketplace
+└── .claude-plugin/marketplace.json     Claude Code marketplace
 ```
 
-网页使用原生 HTML、CSS 和 JavaScript。本地服务使用 Node.js 标准库，没有运行时 npm 依赖。
+根目录的 `server.mjs` 和 `public/` 是主要编辑入口，改完后同步到 `plugins/agent-storyboard/app/`（`npm test` 里有一致性检查）。
 
-主要本地 API：
+</details>
+
+<details>
+<summary>本地调试插件</summary>
+
+```bash
+codex plugin marketplace add .
+codex plugin add agent-storyboard@agent-storyboard
+
+claude plugin marketplace add .
+claude plugin install agent-storyboard@agent-storyboard
+
+claude plugin validate .
+```
+
+</details>
+
+<details>
+<summary>主要本地 API</summary>
 
 ```text
 GET    /api/health
-GET    /api/projects
-POST   /api/projects
-      # 支持在创建时传入 shots，一次性创建完整项目。
-GET    /api/projects/:projectId
-PATCH  /api/projects/:projectId
-DELETE /api/projects/:projectId
-
-GET    /api/projects/:projectId/design
-POST   /api/projects/:projectId/design
-DELETE /api/projects/:projectId/design
-
-POST   /api/projects/:projectId/shots
-PATCH  /api/projects/:projectId/shots/:shotId
-DELETE /api/projects/:projectId/shots/:shotId
-POST   /api/projects/:projectId/shots/:shotId/media
-
-GET    /api/generation/tasks
-POST   /api/generation/tasks
-POST   /api/generation/tasks/:taskId/claim
-POST   /api/generation/tasks/:taskId/complete
-POST   /api/generation/tasks/:taskId/fail
+GET    /api/environment
+GET    /api/projects                        POST 可一次性传入 shots 创建完整项目
+GET    /api/projects/:id                    PUT / PATCH / DELETE
+GET    /api/projects/:id/design             POST / DELETE
+POST   /api/projects/:id/shots              PATCH / DELETE /shots/:shotId
+POST   /api/projects/:id/shots/:shotId/media
+POST   /api/projects/:id/audio/generate     select / align / apply-durations
+GET    /api/generation/tasks                POST 入队
+POST   /api/generation/tasks/:taskId/claim  complete / fail / cancel / heartbeat
 ```
 
-## 隐私说明
-
-- 插件模式下，分镜项目、脚本和素材默认保存在本地 `~/.codex-storyboard/`。
-- 开发模式 `npm start` 默认使用仓库内 `data/`。
-- 仓库不会自动上传项目数据。
-- 本地服务默认运行在 `127.0.0.1`，优先使用端口 `43218`。
-- 使用第三方生成能力时，提示词和输入素材可能受对应服务的隐私条款约束。
+</details>
 
 ## License
 
