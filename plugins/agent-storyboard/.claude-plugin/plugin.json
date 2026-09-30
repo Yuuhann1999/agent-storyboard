@@ -1,0 +1,26 @@
+{
+  "name": "agent-storyboard",
+  "version": "0.8.0",
+  "description": "Local storyboard workbench for AI agents: create and manage video storyboard projects, generate image/video assets per shot, add voiceover, and see results land in the right row.",
+  "author": {
+    "name": "Yuuhann"
+  },
+  "homepage": "https://github.com/Yuuhann1999/agent-storyboard",
+  "repository": "https://github.com/Yuuhann1999/agent-storyboard",
+  "license": "MIT",
+  "keywords": [
+    "storyboard",
+    "video",
+    "short-video",
+    "mcp",
+    "image-generation"
+  ],
+  "mcpServers": {
+    "agent-storyboard": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/mcp/server.mjs"
+      ]
+    }
+  }
+}

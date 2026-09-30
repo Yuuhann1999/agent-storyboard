@@ -1,10 +1,10 @@
+import { defaultDataDir } from "./env-compat.mjs";
 import { createServer } from "node:http";
 import { expireTasks } from "./task-state.mjs";
 import { inspectEnvironment } from "./runtime.mjs";
 import { generateVoice, alignVoice } from "./audio.mjs";
 import { spokenText, dialogueKey, applyTiming, voiceTextsMatch } from "./timing.mjs";
 import { spawn } from "node:child_process";
-import { homedir } from "node:os";
 import {
   copyFile,
   mkdir,
@@ -20,18 +20,18 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const args = parseArgs(process.argv.slice(2));
-const publicDir = resolve(args.publicDir || process.env.CODEX_STORYBOARD_PUBLIC_DIR || join(rootDir, "public"));
+const publicDir = resolve(args.publicDir || process.env.AGENT_STORYBOARD_PUBLIC_DIR || join(rootDir, "public"));
 const dataDir = resolve(
   args.dataDir ||
-  process.env.CODEX_STORYBOARD_DATA_DIR ||
-  process.env.CODEX_STORYBOARD_HOME ||
-  join(homedir(), ".codex-storyboard")
+  process.env.AGENT_STORYBOARD_DATA_DIR ||
+  process.env.AGENT_STORYBOARD_HOME ||
+  defaultDataDir()
 );
 const projectsDir = join(dataDir, "projects");
 const projectsFile = join(dataDir, "projects.json");
 const legacyDataFile = join(dataDir, "storyboard.json");
 const legacyMediaDir = join(dataDir, "media");
-const port = Number(args.port || process.env.PORT || process.env.CODEX_STORYBOARD_PORT || 43218);
+const port = Number(args.port || process.env.PORT || process.env.AGENT_STORYBOARD_PORT || 43218);
 let generationMutationQueue = Promise.resolve();
 let apiQueue = Promise.resolve();
 const audioJobs = new Set();
@@ -343,11 +343,11 @@ function mediaFileNameFromUrl(url) {
 }
 
 function safeDownloadFileName(value) {
-  return String(value || "codex-storyboard")
+  return String(value || "agent-storyboard")
     .trim()
     .replace(/[\\/:*?"<>|]/g, "-")
     .replace(/\s+/g, "-")
-    .slice(0, 80) || "codex-storyboard";
+    .slice(0, 80) || "agent-storyboard";
 }
 
 function shotMediaFileName(project, shot, extension) {
@@ -368,6 +368,33 @@ function coverReferenceFileName(type, extension) {
 
 function audioReferenceFileName(extension) {
   return `voice-reference${extension}`;
+}
+
+// 素材文件名里带镜头序号（shot-003-…）。调整顺序或删除镜头后序号会错位，
+// 之后重新生成会覆盖别的镜头的文件，所以保存前把序号同步成当前顺序。
+const orderedMediaName = /^shot-(\d{3,})(-(?:A-ROLL|B-ROLL)-(?:image|video)\.[A-Za-z0-9]+)$/;
+
+async function reconcileMediaOrder(project) {
+  const directory = projectMediaDir(project.id);
+  const moves = [];
+  project.shots.forEach((shot, index) => {
+    if (!shot.mediaUrl) return;
+    const current = basename(mediaFileNameFromUrl(shot.mediaUrl));
+    const match = orderedMediaName.exec(current);
+    if (!match) return;
+    const wanted = `shot-${String(index + 1).padStart(3, "0")}${match[2]}`;
+    if (wanted !== current) moves.push({ shot, current, wanted, temp: `.moving-${index}-${current}` });
+  });
+  // 先全部改成临时名再落到目标名，互换位置时也不会互相覆盖。
+  for (const move of moves) {
+    try { await rename(join(directory, move.current), join(directory, move.temp)); }
+    catch { move.skip = true; }
+  }
+  for (const move of moves) {
+    if (move.skip) continue;
+    await rename(join(directory, move.temp), join(directory, move.wanted));
+    move.shot.mediaUrl = mediaUrl(project.id, move.wanted);
+  }
 }
 
 async function removeCurrentMedia(project, mediaUrlValue) {
@@ -881,10 +908,10 @@ async function migrateLegacyProject() {
   }
 
   const now = new Date().toISOString();
-  const projectId = "project-codex-storyboard";
+  const projectId = "project-agent-storyboard";
   let project = normalizeProject({
     id: projectId,
-    title: "Codex 分镜台",
+    title: "Agent 分镜台",
     aspectRatio: "16:9",
     shots: [],
     createdAt: now,
@@ -895,7 +922,7 @@ async function migrateLegacyProject() {
   project = normalizeProject({
     ...legacy,
     id: projectId,
-    title: legacy.title || "Codex 分镜台",
+    title: legacy.title || "Agent 分镜台",
     aspectRatio: "16:9",
     createdAt: now
   });
@@ -1069,14 +1096,23 @@ async function handleProjectsApi(request, response, url) {
     if (body.updatedAt && body.updatedAt !== current.updatedAt) {
       return sendError(response, 409, "项目已在其他窗口或生成任务中更新，请保留当前文本并刷新后重试");
     }
-    return sendJson(response, 200, await saveProject({
+    const next = normalizeProject({
       ...current,
       title: body.title,
       aspectRatio: body.aspectRatio,
       scriptDraft: body.scriptDraft ?? current.scriptDraft,
       covers: body.covers || current.covers,
       shots: body.shots
-    }));
+    });
+    // 被删除镜头的素材一并清理，避免文件堆积，也避免之后按序号改名时撞到残留文件。
+    const kept = new Set(next.shots.map((shot) => shot.mediaUrl).filter(Boolean));
+    for (const removed of current.shots) {
+      if (!next.shots.some((shot) => shot.id === removed.id) && removed.mediaUrl && !kept.has(removed.mediaUrl)) {
+        await removeCurrentMedia(current, removed.mediaUrl);
+      }
+    }
+    await reconcileMediaOrder(next);
+    return sendJson(response, 200, await saveProject(next));
   }
 
   if (request.method === "PATCH") {
@@ -1123,7 +1159,9 @@ async function handleShotsApi(request, response, url) {
     }
 
     if (request.method === "DELETE") {
-      project.shots.splice(index, 1);
+      const [removed] = project.shots.splice(index, 1);
+      await removeCurrentMedia(project, removed.mediaUrl);
+      await reconcileMediaOrder(project);
       return sendJson(response, 200, await saveProject(project));
     }
   }
@@ -1499,8 +1537,8 @@ async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/health") {
     return sendJson(response, 200, {
       ok: true,
-      app: "codex-storyboard",
-      version: "0.6.8",
+      app: "agent-storyboard",
+      version: "0.8.0",
       dataDir,
       publicDir
     });
@@ -1545,6 +1583,6 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, "127.0.0.1", () => {
-  console.log(`Codex 分镜台已启动：http://127.0.0.1:${port}`);
+  console.log(`Agent 分镜台已启动：http://127.0.0.1:${port}`);
   console.log(`数据目录：${dataDir}`);
 });

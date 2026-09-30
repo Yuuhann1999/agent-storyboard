@@ -1,21 +1,21 @@
 ---
 name: manage-storyboard-projects
-description: Create, find, inspect, update, or delete Codex Storyboard projects directly through MCP. Use when the user asks Codex to write a new video script or storyboard into the local storyboard app, add or revise shots, rename a project, change its aspect ratio, find an existing project, or delete one without browser automation.
+description: Create, find, inspect, update, or delete Agent Storyboard projects directly through MCP. Use when the user asks the agent (Codex or Claude Code) to write a new video script or storyboard into the local storyboard app, add or revise shots, rename a project, change its aspect ratio, find an existing project, or delete one without browser automation.
 ---
 
 # Manage Storyboard Projects
 
-Use the Codex Storyboard MCP project tools. Never control the browser, never run `npm start` manually during normal use, and never edit data files directly.
+Use the Agent Storyboard MCP project tools. Never control the browser, never run `npm start` manually during normal use, and never edit data files directly.
 
-If the current Codex session does not expose Storyboard MCP tools such as `create_storyboard_project`, `list_storyboard_projects`, or `open_storyboard`, first use `tool_search` to search for `codex storyboard` and load the deferred tools. Only if `tool_search` is unavailable or cannot find them, tell the user to start a new Codex conversation or restart Codex so plugin tools are reloaded. Do not silently fall back to editing local data files directly.
+If the current agent session does not expose Storyboard MCP tools such as `create_storyboard_project`, `list_storyboard_projects`, or `open_storyboard`: in Codex, use `tool_search` to search for `agent storyboard` and load the deferred tools; in Claude Code, check that the `agent-storyboard` MCP server is connected (`/mcp`). Only if they still cannot be found, tell the user to start a new conversation or restart the agent so plugin tools are reloaded. Do not silently fall back to editing local data files directly.
 
 ## Open the storyboard
 
-If the user asks to open, start, launch, or show Codex Storyboard:
+If the user asks to open, start, launch, or show Agent Storyboard:
 
 1. Call `open_storyboard`.
 2. Return the local URL as a clickable link.
-3. Tell the user to open the link in the Codex side panel.
+3. Tell the user to open the link in the agent's side panel or in a browser.
 4. Do not launch Chrome, shell `open`, Computer Use, or Browser automation just to open the page.
 
 The plugin starts the bundled local app automatically. Project data is stored outside the plugin cache by default.

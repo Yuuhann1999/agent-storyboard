@@ -6,12 +6,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
 test("project persistence, conflict detection, generation cancellation and recovery", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "codex-storyboard-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "agent-storyboard-test-"));
   const socket = createServer();
   await new Promise(resolve => socket.listen(0, "127.0.0.1", resolve));
   const port = socket.address().port;
   await new Promise(resolve => socket.close(resolve));
-  const child = spawn(process.execPath, ["server.mjs", "--port", String(port), "--data-dir", directory], { windowsHide: true, env: { ...process.env, CODEX_STORYBOARD_PYTHON: join(directory, "missing-python") } });
+  const child = spawn(process.execPath, ["server.mjs", "--port", String(port), "--data-dir", directory], { windowsHide: true, env: { ...process.env, AGENT_STORYBOARD_VOXCPM_URL: "http://127.0.0.1:1" } });
   const stopped = new Promise(resolve => child.on("close", resolve));
   let log = ""; child.stderr.on("data", d => { log += d; });
   child.stdout.on("data", d => { log += d; });

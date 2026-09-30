@@ -1,11 +1,11 @@
 {
-  "name": "codex-storyboard",
+  "name": "agent-storyboard",
   "private": true,
-  "version": "0.6.8",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "start": "node server.mjs --data-dir ./data",
-    "check": "node --check server.mjs && node --check public/app.js && node --check plugins/codex-storyboard/mcp/server.mjs && node --check plugins/codex-storyboard/app/server.mjs && node --check plugins/codex-storyboard/app/public/app.js"
+    "check": "node --check server.mjs && node --check public/app.js && node --check plugins/agent-storyboard/mcp/server.mjs && node --check plugins/agent-storyboard/app/server.mjs && node --check plugins/agent-storyboard/app/public/app.js"
   }
 }

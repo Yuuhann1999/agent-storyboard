@@ -1,3 +1,5 @@
+import { defaultDataDir as resolveDefaultDataDir } from "../app/env-compat.mjs";
+import { generateImageWithCodex, codexImageAvailable } from "../app/codex-image.mjs";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -6,8 +8,8 @@ import net from "node:net";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SERVER_NAME = "Codex Storyboard MCP";
-const SERVER_VERSION = "0.6.8";
+const SERVER_NAME = "Agent Storyboard MCP";
+const SERVER_VERSION = "0.8.0";
 const DEFAULT_URL = "http://127.0.0.1:43218";
 const ASPECT_RATIOS = ["9:16", "16:9", "3:4", "4:3", "1:1"];
 const BROLL_PLAN_FILE = "broll-plan.json";
@@ -25,9 +27,9 @@ const BROLL_TEMPLATE_REUSE_POLICY = [
 ].join(" ");
 const pluginRoot = fileURLToPath(new URL("..", import.meta.url));
 const bundledServer = join(pluginRoot, "app", "server.mjs");
-const defaultDataDir = process.env.CODEX_STORYBOARD_DATA_DIR ||
-  process.env.CODEX_STORYBOARD_HOME ||
-  join(homedir(), ".codex-storyboard");
+const defaultDataDir = process.env.AGENT_STORYBOARD_DATA_DIR ||
+  process.env.AGENT_STORYBOARD_HOME ||
+  resolveDefaultDataDir();
 let storyboardProcess;
 
 const JsonRpcError = {
@@ -48,7 +50,7 @@ function sendError(id, code, message) {
 }
 
 function storyboardUrl(args = {}) {
-  return String(args.storyboardUrl || process.env.CODEX_STORYBOARD_URL || DEFAULT_URL).replace(/\/+$/, "");
+  return String(args.storyboardUrl || process.env.AGENT_STORYBOARD_URL || DEFAULT_URL).replace(/\/+$/, "");
 }
 
 async function portAvailable(port) {
@@ -84,14 +86,14 @@ async function health(url, timeoutMs = 800) {
 }
 
 async function ensureStoryboard(args = {}) {
-  const explicitUrl = args.storyboardUrl || process.env.CODEX_STORYBOARD_URL;
+  const explicitUrl = args.storyboardUrl || process.env.AGENT_STORYBOARD_URL;
   if (explicitUrl) {
     const url = String(explicitUrl).replace(/\/+$/, "");
     const info = await health(url, 1500);
     return { url, alreadyRunning: true, dataDir: info.dataDir };
   }
 
-  const requestedPort = Number(args.port || process.env.CODEX_STORYBOARD_PORT || 43218);
+  const requestedPort = Number(args.port || process.env.AGENT_STORYBOARD_PORT || 43218);
   const expectedUrl = `http://127.0.0.1:${requestedPort}`;
   try {
     const info = await health(expectedUrl);
@@ -99,7 +101,7 @@ async function ensureStoryboard(args = {}) {
       return { url: expectedUrl, alreadyRunning: true, dataDir: info.dataDir };
     }
   } catch {
-    // 端口上没有可用的 Codex Storyboard，继续启动内置服务。
+    // 端口上没有可用的 Agent Storyboard，继续启动内置服务。
   }
 
   await stat(bundledServer);
@@ -118,8 +120,8 @@ async function ensureStoryboard(args = {}) {
     detached: true,
     env: {
       ...process.env,
-      CODEX_STORYBOARD_PORT: String(port),
-      CODEX_STORYBOARD_DATA_DIR: dataDir,
+      AGENT_STORYBOARD_PORT: String(port),
+      AGENT_STORYBOARD_DATA_DIR: dataDir,
       NODE_ENV: "production"
     },
     stdio: "ignore"
@@ -127,7 +129,7 @@ async function ensureStoryboard(args = {}) {
 
   storyboardProcess.once("exit", (code) => {
     if (code !== 0 && code !== null) {
-      process.stderr.write(`[codex-storyboard] app service exited with code ${code}\n`);
+      process.stderr.write(`[agent-storyboard] app service exited with code ${code}\n`);
     }
     storyboardProcess = undefined;
   });
@@ -144,7 +146,7 @@ async function ensureStoryboard(args = {}) {
 }
 
 async function requestJson(path, options = {}, args = {}) {
-  const base = args.storyboardUrl || process.env.CODEX_STORYBOARD_URL
+  const base = args.storyboardUrl || process.env.AGENT_STORYBOARD_URL
     ? storyboardUrl(args)
     : (await ensureStoryboard(args)).url;
   const response = await fetch(`${base}${path}`, options);
@@ -334,10 +336,10 @@ function videoDependencyWarnings(shots = []) {
   const generators = new Set(shots.map((shot) => shot.generator));
   const warnings = [];
   if (generators.has("remotion")) {
-    warnings.push("Remotion 生成需要当前 Codex 环境启用 Remotion 插件或本地渲染工具链。");
+    warnings.push("Remotion 生成需要当前 Agent 环境启用 Remotion 插件或本地渲染工具链。");
   }
   if (generators.has("hyperframes")) {
-    warnings.push("HyperFrames 生成需要当前 Codex 环境启用 HyperFrames 插件和 CLI。");
+    warnings.push("HyperFrames 生成需要当前 Agent 环境启用 HyperFrames 插件和 CLI。");
   }
   return warnings;
 }
@@ -357,7 +359,7 @@ function tools() {
   return [
     {
       name: "inspect_storyboard_environment",
-      description: "Check local voice dependencies. ImageGen/Remotion/HyperFrames still require verification in the current agent session.",
+      description: "Check the voice service, FFmpeg, Whisper alignment, and which agent CLIs (Codex, Claude Code) and image channel are available on this machine. Remotion / HyperFrames are agent-side capabilities and are not checked here.",
       inputSchema: { type: "object", properties: { storyboardUrl: { type: "string" } }, additionalProperties: false },
       annotations: { readOnlyHint: true, openWorldHint: false }
     },
@@ -374,15 +376,15 @@ function tools() {
     },
     {
       name: "open_storyboard",
-      title: "Open Codex Storyboard",
-      description: "Start or open the bundled local Codex Storyboard app and return its local URL.",
+      title: "Open Agent Storyboard",
+      description: "Start or open the bundled local Agent Storyboard app and return its local URL.",
       inputSchema: {
         type: "object",
         properties: {
           port: { type: "number", description: "Preferred local port. Defaults to 43218." },
           dataDir: {
             type: "string",
-            description: "Optional local data directory. Defaults to ~/.codex-storyboard."
+            description: "Optional local data directory. Defaults to ~/.agent-storyboard."
           },
           storyboardUrl: {
             type: "string",
@@ -516,7 +518,7 @@ function tools() {
     {
       name: "list_storyboard_generation_tasks",
       title: "List Storyboard Generation Tasks",
-      description: "List pending, processing, ready, or failed image/video generation tasks from the local Codex storyboard.",
+      description: "List pending, processing, ready, or failed image/video generation tasks from the local Agent Storyboard.",
       inputSchema: {
         type: "object",
         properties: {
@@ -617,6 +619,18 @@ function tools() {
       }
     },
     {
+      name: "generate_storyboard_image",
+      title: "Generate Storyboard Image With Codex",
+      description: "For an image-gen task: generate the image through the local Codex CLI's image_gen and return it to the storyboard in one call (claims a pending task, applies DESIGN.md and the reference image, keeps the task alive, completes or fails it). Use this when the current agent has no image generation of its own, such as Claude Code. Requires Codex installed and logged in; takes 1 to 6 minutes.",
+      inputSchema: {
+        type: "object",
+        properties: { taskId: { type: "string" }, storyboardUrl: { type: "string" } },
+        required: ["taskId"],
+        additionalProperties: false
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+    },
+    {
       name: "complete_storyboard_generation_task",
       title: "Complete Storyboard Generation Task",
       description: "Copy a generated local image or video into the storyboard media directory and mark the task ready. Confirmed B-roll motion plans are checked again before completion.",
@@ -686,7 +700,7 @@ async function callTool(id, params) {
     sendResult(id, {
       content: [{
         type: "text",
-        text: `Codex Storyboard is ready: ${result.url}\nData directory: ${result.dataDir}`
+        text: `Agent Storyboard is ready: ${result.url}\nData directory: ${result.dataDir}`
       }],
       structuredContent: result
     });
@@ -731,7 +745,7 @@ async function callTool(id, params) {
 
   if (params?.name === "create_storyboard_project") {
     let project;
-    const serviceUrl = args.storyboardUrl || process.env.CODEX_STORYBOARD_URL
+    const serviceUrl = args.storyboardUrl || process.env.AGENT_STORYBOARD_URL
       ? storyboardUrl(args)
       : (await ensureStoryboard(args)).url;
     const requestArgs = { ...args, storyboardUrl: serviceUrl };
@@ -885,6 +899,53 @@ async function callTool(id, params) {
       content: [{ type: "text", text: `Claimed ${args.taskId} from ${result.task.projectTitle} (${result.task.aspectRatio}) for ${result.task.generator}.` }],
       structuredContent: result
     });
+    return;
+  }
+
+  if (params?.name === "generate_storyboard_image") {
+    const task = await findGenerationTask(args.taskId, args);
+    if (task.generator !== "image-gen" || task.mediaType !== "image") {
+      throw new Error(`任务 ${args.taskId} 不是 AI 生图任务（生成方式：${task.generator}），无法用 Codex 出图`);
+    }
+    const availability = await codexImageAvailable();
+    if (!availability.ok) {
+      throw new Error(availability.reason === "not_logged_in"
+        ? "Codex 尚未登录：请先运行 codex login，或改用当前 Agent 自带的生图能力"
+        : "未检测到 Codex CLI：请先安装并登录 Codex，或改用当前 Agent 自带的生图能力");
+    }
+    if (task.status === "pending") {
+      await requestJson(`/api/generation/tasks/${encodeURIComponent(args.taskId)}/claim`, jsonOptions({}), args);
+    }
+    let prompt = String(task.visualPrompt || "").trim();
+    if (task.hasDesign && task.designPath) {
+      const design = (await readFile(task.designPath, "utf8")).slice(0, 6000);
+      prompt += `\n\nProject visual system (DESIGN.md). The shot description above takes precedence when they conflict:\n${design}`;
+    }
+    const keepAlive = setInterval(() => {
+      requestJson(`/api/generation/tasks/${encodeURIComponent(args.taskId)}/heartbeat`, jsonOptions({}), args).catch(() => {});
+    }, 60_000);
+    try {
+      const image = await generateImageWithCodex({
+        prompt,
+        aspect: task.aspectRatio,
+        refImages: task.referenceImagePath ? [task.referenceImagePath] : [],
+        outputPath: join(task.outputDir, "image.png")
+      });
+      const result = await requestJson(
+        `/api/generation/tasks/${encodeURIComponent(args.taskId)}/complete`,
+        jsonOptions({ sourcePath: image.path, mediaType: "image" }),
+        args
+      );
+      sendResult(id, {
+        content: [{ type: "text", text: `Generated with Codex and returned to ${result.task.projectTitle}, ${result.task.taskType === "cover" ? `cover ${result.task.coverType}` : `shot ${result.task.shotIndex}`}.` }],
+        structuredContent: result
+      });
+    } catch (error) {
+      await requestJson(`/api/generation/tasks/${encodeURIComponent(args.taskId)}/fail`, jsonOptions({ error: String(error.message).slice(0, 300) }), args).catch(() => {});
+      throw error;
+    } finally {
+      clearInterval(keepAlive);
+    }
     return;
   }
 

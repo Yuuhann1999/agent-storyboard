@@ -1,9 +1,9 @@
 ---
 name: process-storyboard-tasks
-description: Process pending Codex Storyboard image and video generation tasks. Use when the user asks to generate storyboard assets, process the storyboard queue, generate all shots, generate a specific storyboard row, or return Image Generation, HyperFrames, or Remotion outputs to the local storyboard.
+description: Process pending Agent Storyboard image and video generation tasks. Use when the user asks to generate storyboard assets, process the storyboard queue, generate all shots, generate a specific storyboard row, or return Image Generation, HyperFrames, or Remotion outputs to the local storyboard.
 ---
 
-# Process Codex Storyboard Tasks
+# Process Agent Storyboard Tasks
 
 ## Task recovery
 
@@ -14,7 +14,7 @@ never attach a late output to a replacement task automatically.
 
 Process the local storyboard queue. The MCP tools start the bundled local app automatically when needed and default to `http://127.0.0.1:43218`.
 
-If the current Codex session does not expose Storyboard MCP tools such as `list_storyboard_generation_tasks`, `claim_storyboard_generation_task`, or `complete_storyboard_generation_task`, first use `tool_search` to search for `codex storyboard` and load the deferred tools. Only if `tool_search` is unavailable or cannot find them, tell the user to start a new Codex conversation or restart Codex so plugin tools are reloaded.
+If the current agent session does not expose Storyboard MCP tools such as `list_storyboard_generation_tasks`, `claim_storyboard_generation_task`, or `complete_storyboard_generation_task`: in Codex, use `tool_search` to search for `agent storyboard` and load the deferred tools; in Claude Code, check that the `agent-storyboard` MCP server is connected (`/mcp`). Only if the tools still cannot be found, tell the user to start a new conversation or restart the agent so plugin tools are reloaded.
 
 ## Mandatory B-roll motion gate
 
@@ -42,7 +42,7 @@ After the user confirms, call the same tool again with `approval: "confirmed"`, 
 1. Call `list_storyboard_generation_tasks` with status `pending`.
 2. Inspect the generators used by the pending tasks and verify the matching local capabilities before claiming anything:
 
-   - `image-gen` requires the built-in `imagegen` skill and image generation tool.
+   - `image-gen` requires an image generation capability. If your agent has its own (Codex: the built-in `imagegen` skill and tool), use it. If it does not (for example Claude Code), use the `generate_storyboard_image` tool, which generates through the local Codex CLI; check `inspect_storyboard_environment` first and confirm the "AI 生图" item is ready.
    - `hyperframes` requires the HyperFrames and HyperFrames CLI skills.
    - `remotion` requires the Remotion skill and its local rendering toolchain.
 
@@ -70,7 +70,7 @@ After the user confirms, call the same tool again with `approval: "confirmed"`, 
 
 9. Route by `generator`:
 
-   - `image-gen`: use the built-in `imagegen` skill and built-in image generation tool. Treat `visualPrompt` as the primary prompt and honor the task's `aspectRatio`. If the task includes `referenceImagePath`, use that local image as the visual reference/input for the generation or edit. Copy the final verified image into the active workspace before completing the task.
+   - `image-gen`: with your own image generation, use the built-in `imagegen` skill and tool. Without one, call `generate_storyboard_image` with the `taskId` instead: it claims a pending task, applies `DESIGN.md` and the reference image, keeps the task alive, verifies the file, and completes or fails the task by itself (skip steps 7, 10 and 11 for that task; expect 1 to 6 minutes per image and process tasks one at a time). Treat `visualPrompt` as the primary prompt and honor the task's `aspectRatio`. If the task includes `referenceImagePath`, use that local image as the visual reference/input for the generation or edit. Copy the final verified image into the active workspace before completing the task.
    - `hyperframes`: use the HyperFrames and HyperFrames CLI skills. Start from the selected local or repository template/component/media skeleton, reuse it directly or make the smallest documented adaptation, then create the composition with the task's `width`, `height`, duration, and `visualPrompt`. Lint, inspect, render to MP4, and verify the output.
    - `remotion`: use the Remotion skill. Start from the selected local or repository template/component/media skeleton, reuse it directly or make the smallest documented adaptation, then render an MP4 with the task's `width` and `height` matching the task duration, and verify the output.
 

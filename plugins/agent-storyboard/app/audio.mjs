@@ -1,21 +1,16 @@
-import { writeFile, readFile, mkdtemp, rm, stat } from "node:fs/promises";
+import { readFile, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { run, python, ffmpeg, ffprobe, whisper, whisperModel } from "./runtime.mjs";
+import { run, ffmpeg, ffprobe, whisper, whisperModel } from "./runtime.mjs";
+import { generateVoxcpm } from "./voxcpm.mjs";
 import { matchRecognition } from "./recognition.mjs";
 
 async function verifyVoiceRuntime() {
-  try {
-    await run(python, ["-c", "import gradio_client"], 10000);
-  } catch (error) {
-    throw new Error(`VoxCPM 配音依赖未就绪：当前 Python 无法导入 gradio_client（${python}）。请执行“${python} -m pip install gradio_client==2.7.0”。原始错误：${error.message}`);
-  }
   for (const [command, label] of [[ffmpeg, "FFmpeg"], [ffprobe, "FFprobe"]]) {
     try {
       await run(command, ["-version"]);
     } catch (error) {
-      throw new Error(`${label} 不可用（${command}）。请安装 FFmpeg，或设置 CODEX_STORYBOARD_${label === "FFmpeg" ? "FFMPEG" : "FFPROBE"} 指向可执行文件。原始错误：${error.message}`);
+      throw new Error(`${label} 不可用（${command}）。请安装 FFmpeg，或设置 AGENT_STORYBOARD_${label === "FFmpeg" ? "FFMPEG" : "FFPROBE"} 指向可执行文件。原始错误：${error.message}`);
     }
   }
 }
@@ -45,7 +40,6 @@ export async function audioDuration(path) {
 }
 
 export async function generateVoice({ directory, id, text, instruction, promptWav, promptText }) {
-  const input = join(directory, `${id}.json`);
   const raw = join(directory, `${id}-raw.wav`);
   const output = join(directory, `${id}.wav`);
   let convertedPromptWav = null;
@@ -57,18 +51,10 @@ export async function generateVoice({ directory, id, text, instruction, promptWa
       await run(ffmpeg, ["-y", "-i", String(promptWav), "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", convertedPromptWav], 60000);
       promptForVoice = convertedPromptWav;
     }
-    await writeFile(input, JSON.stringify({
-      text,
-      instruction,
-      output: raw,
-      promptWav: promptForVoice ? String(promptForVoice) : "",
-      promptText: String(promptText || "")
-    }), "utf8");
-    await run(python, [fileURLToPath(new URL("./voice/voxcpm.py", import.meta.url)), input], 10 * 60 * 1000);
+    await generateVoxcpm({ text, output: raw, instruction, promptWav: promptForVoice ? String(promptForVoice) : "", promptText: String(promptText || "") });
     await run(ffmpeg, ["-y", "-i", raw, "-ar", "48000", "-ac", "1", output], 60000);
     return { fileName: `${id}.wav`, durationMs: await audioDuration(output) };
   } finally {
-    await rm(input, { force: true });
     await rm(raw, { force: true });
     if (convertedPromptWav) await rm(convertedPromptWav, { force: true });
   }

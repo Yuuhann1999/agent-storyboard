@@ -1,14 +1,14 @@
 {
-  "name": "codex-storyboard",
+  "name": "agent-storyboard",
   "interface": {
-    "displayName": "Codex Storyboard"
+    "displayName": "Agent Storyboard"
   },
   "plugins": [
     {
-      "name": "codex-storyboard",
+      "name": "agent-storyboard",
       "source": {
         "source": "local",
-        "path": "./plugins/codex-storyboard"
+        "path": "./plugins/agent-storyboard"
       },
       "policy": {
         "installation": "AVAILABLE",

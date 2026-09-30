@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "codex_storyboard_mcp": {
+    "agent_storyboard_mcp": {
       "command": "node",
       "args": [
         "./mcp/server.mjs"

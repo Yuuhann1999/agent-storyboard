@@ -1,1 +1,0 @@
-gradio_client==2.7.0

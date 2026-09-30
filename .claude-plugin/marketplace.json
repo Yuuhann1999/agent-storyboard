@@ -1,0 +1,14 @@
+{
+  "name": "agent-storyboard",
+  "owner": { "name": "Yuuhann" },
+  "metadata": { "description": "Agent Storyboard: a local storyboard workbench for Codex and Claude Code." },
+  "plugins": [
+    {
+      "name": "agent-storyboard",
+      "source": "./plugins/agent-storyboard",
+      "description": "Create storyboard projects, generate image and video assets per shot, add voiceover, and see results land in the right row.",
+      "version": "0.8.0",
+      "category": "productivity"
+    }
+  ]
+}
