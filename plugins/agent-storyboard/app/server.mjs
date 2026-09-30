@@ -2,7 +2,7 @@ import { defaultDataDir } from "./env-compat.mjs";
 import { createServer } from "node:http";
 import { expireTasks } from "./task-state.mjs";
 import { inspectEnvironment } from "./runtime.mjs";
-import { generateVoice, alignVoice } from "./audio.mjs";
+import { generateVoice, alignVoice, transcribeReference } from "./audio.mjs";
 import { spokenText, dialogueKey, applyTiming, voiceTextsMatch } from "./timing.mjs";
 import { spawn } from "node:child_process";
 import {
@@ -1499,14 +1499,35 @@ async function handleApi(request, response, url) {
     project.audio.startedAt = new Date().toISOString();
     audioJobs.add(projectId);
     const saved = await saveProject(project);
-    void generateVoice({
-      directory: projectMediaDir(projectId),
-      id,
-      text,
-      instruction,
-      promptWav: referencePath,
-      promptText: referenceText
-    }).then(result => serializeApi(async () => {
+    let usedPromptText = referenceText;
+    const setProgress = (progress) => serializeApi(async () => {
+      const current = await readProject(projectId);
+      current.audio.progress = progress;
+      await saveProject(current);
+    }).catch(() => {});
+    void (async () => {
+      // 没填参考音频原文时，用本地 Whisper 识别一份：有原文，音色还原度明显更高。
+      if (referencePath && !usedPromptText.trim()) {
+        usedPromptText = (await transcribeReference(referencePath)).slice(0, 1000);
+        if (usedPromptText) {
+          await serializeApi(async () => {
+            const current = await readProject(projectId);
+            if (current.audio.reference) current.audio.reference.text = usedPromptText;
+            current.audio.reference && (current.audio.reference.textAuto = true);
+            await saveProject(current);
+          });
+        }
+      }
+      return generateVoice({
+        directory: projectMediaDir(projectId),
+        id,
+        text,
+        instruction,
+        promptWav: referencePath,
+        promptText: usedPromptText,
+        onProgress: (done, total) => setProgress({ done, total })
+      });
+    })().then(result => serializeApi(async () => {
       const current = await readProject(projectId);
       current.audio.takes.push({
         id,
@@ -1515,16 +1536,18 @@ async function handleApi(request, response, url) {
         text,
         instruction,
         referenceFileName,
-        referenceText,
+        referenceText: usedPromptText,
         createdAt: new Date().toISOString()
       });
       current.audio.selectedId = id;
       current.audio.status = "ready";
+      current.audio.progress = null;
       await saveProject(current);
     })).catch(error => serializeApi(async () => {
       try {
         const current = await readProject(projectId);
         current.audio.status = "failed";
+        current.audio.progress = null;
         current.audio.error = String(error.message).slice(-1500);
         await saveProject(current);
       } catch (saveError) { console.error(saveError); }

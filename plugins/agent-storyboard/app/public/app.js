@@ -2499,7 +2499,9 @@ function renderVoice() {
   const busy = ["generating", "aligning"].includes(audio.status);
   const hasSpokenShots = Array.isArray(project?.shots) && project.shots.some(shot => String(shot.dialogue || "").trim());
   const status = document.querySelector("#voice-status");
-  status.textContent = ({ generating: "生成中", aligning: "对齐中", ready: "已就绪", failed: "需要处理" })[audio.status] || "未生成";
+  status.textContent = audio.status === "generating" && audio.progress?.total
+    ? `生成中 ${audio.progress.done}/${audio.progress.total}`
+    : ({ generating: "生成中", aligning: "对齐中", ready: "已就绪", failed: "需要处理" })[audio.status] || "未生成";
   status.dataset.status = audio.status || "idle";
   const reference = audio.reference && typeof audio.reference === "object" ? audio.reference : null;
   const referenceName = document.querySelector("#voice-reference-name");

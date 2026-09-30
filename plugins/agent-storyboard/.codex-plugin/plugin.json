@@ -1,6 +1,6 @@
 {
   "name": "agent-storyboard",
-  "version": "0.8.0+codex.20260930175024",
+  "version": "0.8.0+codex.20260930213133",
   "description": "Start the local Agent Storyboard app, create and manage storyboard projects, process image and video generation tasks, and return assets to the right shot. Works in Codex and Claude Code.",
   "author": {
     "name": "Yuuhann"
