@@ -1,5 +1,6 @@
 import { createAutosave } from "./autosave.js";
-import { inspectPacing } from "./pacing.js";
+import { inspectPacingDetailed } from "./pacing.js";
+import { newShotId, moveShot, cloneShot, shotMatches, shotStatusCounts } from "./shots.js";
 import { renderVoicePlayer } from "./voice-player.js";
 const projectsView = document.querySelector("#projects-view");
 const storyboardView = document.querySelector("#storyboard-view");
@@ -69,10 +70,10 @@ const selectOptions = {
     { value: "video", label: "视频" }
   ],
   generator: [
-    { value: "manual", label: "手动素材" },
-    { value: "image-gen", label: "Image Generation" },
-    { value: "hyperframes", label: "HyperFrames" },
-    { value: "remotion", label: "Remotion" }
+    { value: "manual", label: "手动素材", hint: "自己上传图片或视频" },
+    { value: "image-gen", label: "AI 生图", hint: "Image Generation：按画面描述生成图片" },
+    { value: "hyperframes", label: "HyperFrames 动效", hint: "用 HTML 生成动画 / 字幕 / 信息图视频" },
+    { value: "remotion", label: "Remotion 动效", hint: "用 React 生成程序化动画视频" }
   ]
 };
 
@@ -189,6 +190,17 @@ let activeStyleFilter = "all";
 let styleData = [];
 let pendingStyleId = "";
 let targetProjectId = "";
+let projectQuery = "";
+let shotQuery = "";
+let density = readPreference("codex-storyboard-density", "comfortable");
+let dragShotId = "";
+
+function readPreference(key, fallback) {
+  try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
+}
+function writePreference(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* 本地存储不可用时仅本次生效 */ }
+}
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -226,12 +238,20 @@ function toggleTheme() {
   updateThemeButtons();
 }
 
-function showToast(message, type = "info") {
+function showToast(message, type = "info", action = null) {
   clearTimeout(toastTimer);
-  toast.textContent = message;
+  toast.replaceChildren(document.createTextNode(message));
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "toast-action";
+    button.textContent = action.label;
+    button.addEventListener("click", () => { toast.hidden = true; action.run(); });
+    toast.append(button);
+  }
   toast.dataset.type = type;
   toast.hidden = false;
-  toastTimer = setTimeout(() => { toast.hidden = true; }, 2600);
+  toastTimer = setTimeout(() => { toast.hidden = true; }, action ? 7000 : 2600);
 }
 
 function emptyShot() {
@@ -382,15 +402,43 @@ function isBatchGeneratable(shot) {
 function updateBatchButton() {
   const count = project?.shots.filter(isBatchGeneratable).length || 0;
   generateAllButton.disabled = count === 0;
-  generateAllButton.textContent = count > 0 ? `批量生成 ${count}` : "批量生成";
+  const badge = generateAllButton.querySelector(".tool-count");
+  badge.hidden = count === 0;
+  badge.textContent = String(count);
+  generateAllButton.setAttribute("aria-label", count > 0 ? `批量生成，${count} 个镜头待生成` : "批量生成");
+  updateTaskChip();
+}
+
+function updateTaskChip() {
+  const chip = document.querySelector("#task-chip");
+  if (!project) { chip.hidden = true; return; }
+  const counts = shotStatusCounts(project.shots, Object.values(project.covers || {}));
+  const parts = [];
+  if (counts.processing) parts.push(`生成中 ${counts.processing}`);
+  if (counts.pending) parts.push(`排队 ${counts.pending}`);
+  if (counts.failed) parts.push(`失败 ${counts.failed}`);
+  chip.hidden = parts.length === 0;
+  chip.textContent = parts.join(" · ");
+  chip.dataset.state = counts.failed ? "failed" : "active";
+  chip.title = counts.failed ? "点击定位到第一个失败的镜头" : "点击定位到正在处理的镜头";
+}
+
+function focusShotRow(index) {
+  const row = body.children[index];
+  if (!row) return;
+  if (row.hidden) { shotQuery = ""; document.querySelector("#shot-search").value = ""; applyShotFilter(); }
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.classList.remove("row-flash");
+  void row.offsetWidth;
+  row.classList.add("row-flash");
 }
 
 function safeFileName(value) {
-  return String(value || "codex-storyboard")
+  return String(value || "agent-storyboard")
     .trim()
     .replace(/[\\/:*?"<>|]/g, "-")
     .replace(/\s+/g, "-")
-    .slice(0, 80) || "codex-storyboard";
+    .slice(0, 80) || "agent-storyboard";
 }
 
 function escapeHtml(value) {
@@ -520,7 +568,7 @@ function buildHtmlExport() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="generator" content="Codex Storyboard · Kami">
+  <meta name="generator" content="Agent Storyboard · Kami">
   <title>${escapeHtml(project.title)} · 分镜脚本</title>
   <style>
     @page {
@@ -666,7 +714,7 @@ function buildHtmlExport() {
 </head>
 <body>
   <main class="sheet">
-    <p class="eyebrow">CODEX STORYBOARD</p>
+    <p class="eyebrow">AGENT STORYBOARD</p>
     <h1>${escapeHtml(project.title)}</h1>
     <p class="meta-line">${escapeHtml(meta)}</p>
     <h2 class="section-title">镜头脚本</h2>
@@ -687,7 +735,7 @@ function buildHtmlExport() {
         </table>
       </div>
     ` : "<p class=\"empty\">当前项目暂无镜头。</p>"}
-    <p class="footer">Exported from Codex Storyboard · Kami table</p>
+    <p class="footer">Exported from Agent Storyboard · Kami table</p>
   </main>
 </body>
 </html>
@@ -795,11 +843,44 @@ async function loadProjects() {
   renderProjects();
 }
 
+function duplicateProject(item) {
+  return async () => {
+    try {
+      const source = await api(`/api/projects/${encodeURIComponent(item.id)}`);
+      const created = await api("/api/projects", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `${source.title} 副本`.slice(0, 60),
+          aspectRatio: source.aspectRatio,
+          shots: source.shots.map((shot) => cloneShot(shot))
+        })
+      });
+      if (source.scriptDraft) {
+        await api(`/api/projects/${encodeURIComponent(created.id)}`, {
+          method: "PUT",
+          body: JSON.stringify({ ...created, scriptDraft: source.scriptDraft })
+        });
+      }
+      await loadProjects();
+      showToast("已复制项目（不含素材和配音）");
+    } catch (error) {
+      showToast(error.message, "error");
+    }
+  };
+}
+
 function renderProjects() {
   projectsGrid.replaceChildren();
-  document.querySelector("#project-count").textContent = `${projects.length} 个项目`;
+  const search = document.querySelector("#project-search");
+  search.hidden = projects.length < 6;
+  const visible = projectQuery
+    ? projects.filter((item) => item.title.toLowerCase().includes(projectQuery.toLowerCase()))
+    : projects;
+  document.querySelector("#project-count").textContent = projectQuery
+    ? `${visible.length} / ${projects.length} 个项目`
+    : `${projects.length} 个项目`;
 
-  projects.forEach((item) => {
+  visible.forEach((item) => {
     const card = projectCardTemplate.content.firstElementChild.cloneNode(true);
     card.dataset.id = item.id;
     card.style.setProperty("--project-ratio", item.aspectRatio.replace(":", " / "));
@@ -809,12 +890,15 @@ function renderProjects() {
     card.querySelector(".project-placeholder strong").textContent = item.aspectRatio;
     const image = card.querySelector(".project-cover img");
     if (item.coverUrl) {
+      // 封面文件丢失时回退到占位，不要露出破图和 alt 文字。
+      image.addEventListener("error", () => card.classList.remove("has-cover"), { once: true });
       image.src = item.coverUrl;
-      image.alt = `${item.title} 项目封面`;
+      image.alt = "";
       card.classList.add("has-cover");
     }
     card.querySelector(".project-open").addEventListener("click", () => navigate(projectPath(item.id)));
     card.querySelector(".rename-project").addEventListener("click", () => openProjectDialog("rename", item));
+    card.querySelector(".duplicate-project").addEventListener("click", duplicateProject(item));
     card.querySelector(".delete-project").addEventListener("click", () => {
       deletingProjectId = item.id;
       document.querySelector("#delete-message").textContent =
@@ -824,6 +908,18 @@ function renderProjects() {
     projectsGrid.append(card);
   });
 
+  if (projectQuery && visible.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "projects-empty";
+    empty.textContent = `没有找到包含“${projectQuery}”的项目`;
+    projectsGrid.append(empty);
+  }
+  if (projects.length === 0) {
+    const hint = document.createElement("div");
+    hint.className = "projects-empty projects-welcome";
+    hint.innerHTML = "<strong>还没有项目，从这里开始</strong><ol><li>点右边的「新建项目」，选好名称和画面比例；</li><li>把脚本贴进「脚本」页，或在你的 Agent（Codex / Claude Code）里说：<code>创建一个 9:16 的短视频分镜项目</code>；</li><li>在「分镜」页检查镜头，点「批量生成」让 Agent 出图出片，结果会自动回填。</li></ol>";
+    projectsGrid.append(hint);
+  }
   const add = document.createElement("button");
   add.className = "new-project-card";
   add.type = "button";
@@ -856,7 +952,7 @@ function showProjectsView() {
 
 function syncStoryboardViewport() {
   const root = document.documentElement;
-  if (storyboardView.hidden || !window.matchMedia("(max-width: 1180px)").matches) {
+  if (storyboardView.hidden || !window.matchMedia("(max-width: 1400px)").matches) {
     root.style.removeProperty("--storyboard-topbar-height");
     return;
   }
@@ -889,7 +985,7 @@ function showHomeTab(tab) {
   document.querySelector("#home-actions").hidden = false;
   document.querySelector("#storyboard-actions").hidden = true;
   syncStoryboardViewport();
-  document.title = "Codex 分镜台";
+  document.title = "Agent 分镜台";
   if (tab === "styles") loadStylesView();
 }
 
@@ -950,11 +1046,11 @@ function buildStoryboardPrompt() {
   const ratio = project.aspectRatio || "16:9";
   const projectId = project.id || "（当前项目 ID 未知，请先通过 list_storyboard_projects 查找）";
   return [
-    "这是一个写回 Codex 分镜台的执行指令，不是让你在聊天里输出 Markdown 表格。",
+    "这是一个写回 Agent 分镜台的执行指令，不是让你在聊天里输出 Markdown 表格。",
     `目标项目：${project.title}`,
     `项目 ID：${projectId}`,
     "",
-    `请基于下面的口播文案和（如果存在）第一步生成的配音时间轴，站在导演视角，为 Codex 分镜台项目「${project.title}」生成完整的视觉编排，并直接写入上述项目的“分镜”页表格。`,
+    `请基于下面的口播文案和（如果存在）第一步生成的配音时间轴，站在导演视角，为 Agent 分镜台项目「${project.title}」生成完整的视觉编排，并直接写入上述项目的“分镜”页表格。`,
     "",
     "现在只完成视觉编排阶段：只生成并写入镜头规划，不要直接制作图片、动画或视频，也不要调用任何素材生成工具。",
     "",
@@ -974,7 +1070,7 @@ function buildStoryboardPrompt() {
     "",
     "## 基础项目约束",
     `- 画面比例：${ratio}`,
-    "- 后续落地到 Codex 分镜台时，每个镜头需要能够明确映射到 rollType、mediaType、duration、dialogue、visualPrompt、generator、notes。",
+    "- 后续落地到 Agent 分镜台时，每个镜头需要能够明确映射到 rollType、mediaType、duration、dialogue、visualPrompt、generator、notes。",
     "- A-ROLL 用于真人口播或主讲；B-ROLL 用于画面补充、录屏、数据图、动画。",
     "- generator 只能使用 manual、image-gen、hyperframes、remotion。",
     "- visualPrompt 要能直接指导图片或视频素材生成。",
@@ -1046,6 +1142,16 @@ function buildStoryboardPrompt() {
   ].join("\n");
 }
 
+function fillScriptFromShots() {
+  const lines = project.shots.map((shot) => String(shot.dialogue || "").trim()).filter(Boolean);
+  if (!lines.length) return showToast("镜头里还没有台词可以汇总", "error");
+  if (project.scriptDraft.trim() && !confirm("脚本草稿里已有内容，用镜头台词覆盖它吗？")) return;
+  project.scriptDraft = lines.join("\n\n");
+  renderScriptPanel();
+  queueSave();
+  showToast(`已汇总 ${lines.length} 段台词到脚本`);
+}
+
 async function copyStoryboardPrompt() {
   if (!project) return;
   await flushSave();
@@ -1094,7 +1200,8 @@ function renderAssetsPanel() {
     const selected = button.dataset.assetFilter === activeAssetFilter;
     button.setAttribute("aria-selected", String(selected));
   });
-  const assets = projectAssets().filter((item) => {
+  // 这一页只看已经做出来的素材：没有文件的镜头（含 A-ROLL 占位）不列出。
+  const assets = projectAssets().filter((item) => !item.isPlaceholder).filter((item) => {
     if (activeAssetFilter === "all") return true;
     if (activeAssetFilter === "cover") return item.type === "cover";
     return item.type === "shot" && item.mediaType === activeAssetFilter;
@@ -1104,7 +1211,9 @@ function renderAssetsPanel() {
   if (assets.length === 0) {
     const empty = document.createElement("div");
     empty.className = "assets-empty";
-    empty.textContent = "当前筛选下暂无素材。";
+    empty.textContent = project.shots.some((shot) => shot.mediaUrl) || coverAssets().length
+      ? "当前筛选下暂无素材。"
+      : "还没有素材。在「分镜」页上传或生成后，会出现在这里。";
     assetsGrid.append(empty);
     return;
   }
@@ -1123,6 +1232,7 @@ function renderAssetsPanel() {
         : document.createElement("img");
       media.src = item.mediaUrl;
       media.alt = item.description;
+      media.addEventListener("error", () => replaceWithMissing(media), { once: true });
       button.append(media);
       button.addEventListener("click", () => openAssetPreview(item));
     } else {
@@ -1146,8 +1256,15 @@ function renderAssetsPanel() {
     const meta = document.createElement("span");
     meta.textContent = item.type === "cover"
       ? "封面素材"
-      : `${item.rollType} · ${item.isPlaceholder ? "占位" : selectLabel("mediaType", item.sourceMediaType)}`;
+      : `${item.rollType} · ${selectLabel("mediaType", item.sourceMediaType)}`;
     bodyElement.append(title, meta);
+    if (item.type === "shot") {
+      const state = document.createElement("span");
+      state.className = "asset-state";
+      state.dataset.status = item.shot.mediaUrl ? "ready" : (item.shot.generationStatus || "idle");
+      state.textContent = item.shot.mediaUrl ? "已完成" : generationLabel(item.shot);
+      bodyElement.append(state);
+    }
     card.append(button, bodyElement);
     assetsGrid.append(card);
   });
@@ -1168,6 +1285,13 @@ function openAssetPreview(item) {
   lightbox.hidden = false;
   document.body.classList.add("lightbox-open");
   document.querySelector("#lightbox-close").focus();
+}
+
+function replaceWithMissing(media) {
+  const missing = document.createElement("span");
+  missing.className = "empty-preview";
+  missing.textContent = "素材文件缺失";
+  media.replaceWith(missing);
 }
 
 function renderPreview(shot, index) {
@@ -1221,6 +1345,7 @@ function renderPreview(shot, index) {
     : document.createElement("img");
   media.src = shot.mediaUrl;
   media.alt = shot.visualPrompt || `镜头 ${index + 1} 素材`;
+  media.addEventListener("error", () => replaceWithMissing(media), { once: true });
   preview.append(media);
 
   const label = document.createElement("span");
@@ -1661,6 +1786,7 @@ function openSelect(trigger, field, shot, onChange) {
     button.setAttribute("aria-selected", String(option.value === shot[field]));
     button.dataset.index = String(index);
     button.textContent = option.label;
+    if (option.hint) button.title = option.hint;
     button.addEventListener("click", () => {
       onChange(option.value);
       closeSelect({ restoreFocus: true });
@@ -1728,11 +1854,26 @@ function renderSelect(container, field, shot, onChange) {
 }
 
 function updateSummary() {
-  const warnings = inspectPacing(project.shots);
-  document.querySelector("#pacing-summary").textContent = warnings.length ? `节奏检查 · ${warnings.length} 条建议` : "节奏检查 · 无明显异常";
-  document.querySelector("#pacing-results").replaceChildren(...warnings.map(message => {
-    const item = document.createElement("li"); item.textContent = message; return item;
+  const warnings = inspectPacingDetailed(project.shots);
+  const summary = document.querySelector("#pacing-summary");
+  summary.textContent = warnings.length ? `节奏检查 · ${warnings.length} 条建议` : "节奏检查 · 无明显异常";
+  summary.dataset.state = warnings.length ? "warn" : "ok";
+  document.querySelector("#pacing-results").replaceChildren(...warnings.map(({ message, indexes }) => {
+    const item = document.createElement("li");
+    const jump = document.createElement("button");
+    jump.type = "button";
+    jump.className = "pacing-jump";
+    jump.textContent = message;
+    jump.addEventListener("click", () => focusShotRow(indexes[0]));
+    item.append(jump);
+    return item;
   }));
+  body.querySelectorAll(".shot-row").forEach((row, index) => {
+    const messages = warnings.filter((item) => item.indexes.includes(index)).map((item) => item.message);
+    const flag = row.querySelector(".pacing-flag");
+    flag.hidden = messages.length === 0;
+    flag.title = messages.join("\n");
+  });
   durationTotal.textContent = formatDuration(
     project.shots.reduce((sum, shot) => sum + Number(shot.duration || 0), 0)
   );
@@ -1752,8 +1893,18 @@ const autosave = createAutosave({
       method: "PUT",
       body: JSON.stringify(snapshot)
     }),
-  onSaved: (saved) => { if (project?.id === saved.id) project.updatedAt = saved.updatedAt; },
-  onState: (state) => { saveStatus.textContent = ({ dirty: "待保存", saving: "保存中…", saved: "已保存", error: "保存失败，点击重试" })[state]; },
+  onSaved: (saved) => {
+    if (project?.id !== saved.id) return;
+    project.updatedAt = saved.updatedAt;
+    // 调整顺序后服务端会同步素材文件名，这里跟上新的地址，避免预览变成破图。
+    const urls = new Map(saved.shots.map((shot) => [shot.id, shot.mediaUrl]));
+    let changed = false;
+    for (const shot of project.shots) {
+      if (urls.has(shot.id) && urls.get(shot.id) !== shot.mediaUrl) { shot.mediaUrl = urls.get(shot.id); changed = true; }
+    }
+    if (changed) restoreFocusAfter(renderStoryboard);
+  },
+  onState: (state) => { saveStatus.dataset.state = state; saveStatus.textContent = ({ dirty: "待保存", saving: "保存中…", saved: "已保存", error: "保存失败，点击重试" })[state]; },
   onError: (error) => showToast(error.message, "error")
 });
 saveStatus.addEventListener("click", () => autosave.flush());
@@ -1762,12 +1913,184 @@ window.addEventListener("beforeunload", (event) => {
 });
 window.addEventListener("online", () => autosave.flush());
 
+function restoreFocusAfter(action) {
+  const active = document.activeElement;
+  const id = active?.closest?.(".shot-row")?.dataset.id;
+  const field = active?.dataset?.field;
+  const selection = field && "selectionStart" in active ? [active.selectionStart, active.selectionEnd] : null;
+  action();
+  if (!id || !field) return;
+  const target = body.querySelector(`.shot-row[data-id="${id}"] [data-field="${field}"]`);
+  if (!target) return;
+  target.focus({ preventScroll: true });
+  if (selection) target.setSelectionRange(...selection);
+}
+
+function flashShot(id) {
+  const row = body.querySelector(`.shot-row[data-id="${id}"]`);
+  if (!row) return;
+  row.classList.remove("row-flash");
+  void row.offsetWidth;
+  row.classList.add("row-flash");
+}
+
+function reorderShots(from, to) {
+  const next = moveShot(project.shots, from, to);
+  if (next === project.shots) return;
+  const movedId = project.shots[from].id;
+  restoreFocusAfter(() => { project.shots = next; renderStoryboard(); });
+  queueSave();
+  flashShot(movedId);
+  body.querySelector(`.shot-row[data-id="${movedId}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function duplicateShotAt(index) {
+  const copy = cloneShot(project.shots[index]);
+  project.shots.splice(index + 1, 0, copy);
+  renderStoryboard();
+  queueSave();
+  focusShotRow(index + 1);
+  showToast(`已复制镜头 ${index + 1}（不含素材）`);
+}
+
+function insertShotAfter(index) {
+  const shot = { ...emptyShot(), id: newShotId(), rollType: project.shots[index]?.rollType || "B-ROLL" };
+  project.shots.splice(index + 1, 0, shot);
+  renderStoryboard();
+  queueSave();
+  focusShotRow(index + 1);
+  body.children[index + 1]?.querySelector('[data-field="dialogue"]')?.focus({ preventScroll: true });
+}
+
+function removeShotAt(index) {
+  const [removed] = project.shots.splice(index, 1);
+  const hadMedia = Boolean(removed.mediaUrl);
+  renderStoryboard();
+  queueSave();
+  showToast(hadMedia ? `已删除镜头 ${index + 1}，其素材文件不再保留` : `已删除镜头 ${index + 1}`, "info", {
+    label: hadMedia ? "撤销（仅文案）" : "撤销",
+    run: () => {
+      // 删除后其余镜头的素材文件会按新顺序改名，原素材无法原样恢复，只恢复文案与设置。
+      const restored = hadMedia ? cloneShot(removed, removed.id) : removed;
+      project.shots.splice(Math.min(index, project.shots.length), 0, restored);
+      renderStoryboard();
+      queueSave();
+      focusShotRow(Math.min(index, project.shots.length - 1));
+    }
+  });
+}
+
+function openRowMenu(trigger, index) {
+  if (activeSelect?.trigger === trigger) return closeSelect({ restoreFocus: true });
+  closeSelect();
+  const menu = document.createElement("div");
+  menu.className = "select-menu row-menu-popover";
+  menu.setAttribute("role", "menu");
+  const last = project.shots.length - 1;
+  const items = [
+    { label: "上移", disabled: index === 0, run: () => reorderShots(index, index - 1) },
+    { label: "下移", disabled: index === last, run: () => reorderShots(index, index + 1) },
+    { label: "复制镜头", run: () => duplicateShotAt(index) },
+    { label: "在下方插入镜头", run: () => insertShotAfter(index) },
+    { label: "删除镜头", danger: true, run: () => removeShotAt(index) }
+  ];
+  items.forEach((item, position) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "select-option";
+    button.setAttribute("role", "menuitem");
+    button.disabled = Boolean(item.disabled);
+    if (item.danger) button.dataset.danger = "true";
+    button.textContent = item.label;
+    button.addEventListener("click", () => { closeSelect(); item.run(); });
+    button.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") return closeSelect({ restoreFocus: true });
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      const enabled = [...menu.querySelectorAll("button:not(:disabled)")];
+      const at = enabled.indexOf(button);
+      enabled[(at + (event.key === "ArrowDown" ? 1 : enabled.length - 1)) % enabled.length]?.focus();
+    });
+    menu.append(button);
+    if (position === items.length - 2) menu.append(Object.assign(document.createElement("div"), { className: "menu-separator" }));
+  });
+  selectPortal.append(menu);
+  trigger.setAttribute("aria-expanded", "true");
+  activeSelect = { trigger, menu };
+  positionMenu(trigger, menu);
+  menu.querySelector("button:not(:disabled)")?.focus();
+}
+
+function applyShotFilter() {
+  let shown = 0;
+  body.querySelectorAll(".shot-row").forEach((row, index) => {
+    const match = shotMatches(project.shots[index], shotQuery);
+    row.hidden = !match;
+    if (match) shown++;
+  });
+  const none = body.querySelector(".no-match-row");
+  if (none) none.hidden = shown > 0 || project.shots.length === 0;
+}
+
+function applyDensity() {
+  document.querySelector(".table-shell").dataset.density = density;
+  document.querySelectorAll("[data-density]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.density === density));
+  });
+}
+
+function attachRowDrag(row, shot) {
+  const handle = row.querySelector(".drag-handle");
+  const stop = () => { row.draggable = false; };
+  handle.addEventListener("pointerdown", () => { row.draggable = true; });
+  handle.addEventListener("pointerup", stop);
+  row.addEventListener("dragstart", (event) => {
+    if (!row.draggable) return;
+    dragShotId = shot.id;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", shot.id);
+    row.classList.add("dragging");
+  });
+  row.addEventListener("dragend", () => {
+    stop();
+    dragShotId = "";
+    row.classList.remove("dragging");
+    body.querySelectorAll("[data-drop]").forEach((item) => delete item.dataset.drop);
+  });
+  row.addEventListener("dragover", (event) => {
+    if (!dragShotId || dragShotId === shot.id) return;
+    event.preventDefault();
+    const rect = row.getBoundingClientRect();
+    body.querySelectorAll("[data-drop]").forEach((item) => { if (item !== row) delete item.dataset.drop; });
+    row.dataset.drop = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+    const shell = document.querySelector(".table-shell");
+    const box = shell.getBoundingClientRect();
+    if (event.clientY < box.top + 70) shell.scrollTop -= 18;
+    else if (event.clientY > box.bottom - 70) shell.scrollTop += 18;
+  });
+  row.addEventListener("dragleave", (event) => {
+    if (!row.contains(event.relatedTarget)) delete row.dataset.drop;
+  });
+  row.addEventListener("drop", (event) => {
+    if (!dragShotId) return;
+    event.preventDefault();
+    const after = row.dataset.drop === "after";
+    delete row.dataset.drop;
+    const from = project.shots.findIndex((item) => item.id === dragShotId);
+    const target = project.shots.findIndex((item) => item.id === shot.id);
+    if (from < 0 || target < 0) return;
+    let to = target + (after ? 1 : 0);
+    if (from < to) to--;
+    reorderShots(from, to);
+  });
+}
+
 function renderStoryboard() {
   renderVoice();
   closeSelect();
   ensureCovers();
   project.scriptDraft = String(project.scriptDraft || "");
-  document.title = `${project.title} · Codex 分镜台`;
+  document.title = `${project.title} · Agent 分镜台`;
   document.querySelector("#project-title").textContent = project.title;
   document.querySelector("#project-ratio").textContent = project.aspectRatio;
   renderProjectTabs();
@@ -1779,7 +2102,7 @@ function renderStoryboard() {
   project.shots.forEach((shot, index) => {
     const row = shotTemplate.content.firstElementChild.cloneNode(true);
     row.dataset.id = shot.id;
-    row.querySelector(".index-cell").textContent = String(index + 1).padStart(2, "0");
+    row.querySelector(".row-index").textContent = String(index + 1).padStart(2, "0");
 
     row.querySelectorAll("[data-field]").forEach((control) => {
       const field = control.dataset.field;
@@ -1831,17 +2154,27 @@ function renderStoryboard() {
       );
     });
 
-    row.querySelector(".delete-shot").addEventListener("click", async () => {
-      await api(
-        `/api/projects/${encodeURIComponent(project.id)}/shots/${encodeURIComponent(shot.id)}`,
-        { method: "DELETE" }
-      );
-      project.shots.splice(index, 1);
-      renderStoryboard();
-    });
+    const menuButton = row.querySelector(".row-menu");
+    menuButton.addEventListener("click", () => openRowMenu(menuButton, project.shots.findIndex((item) => item.id === shot.id)));
+    attachRowDrag(row, shot);
     body.append(row);
   });
 
+  if (project.shots.length === 0) {
+    const empty = document.createElement("tr");
+    empty.className = "empty-row";
+    empty.innerHTML = '<td colspan="10"><strong>这个项目还没有镜头</strong><span>点右上角「＋ 新增镜头」手动添加，或在脚本页写好脚本后让 Agent 拆成分镜。</span></td>';
+    body.append(empty);
+  } else {
+    const none = document.createElement("tr");
+    none.className = "no-match-row";
+    none.hidden = true;
+    none.innerHTML = '<td colspan="10">没有匹配的镜头</td>';
+    body.append(none);
+  }
+
+  applyDensity();
+  applyShotFilter();
   updateSummary();
   updateBatchButton();
   renderAssetsPanel();
@@ -2092,7 +2425,7 @@ async function cancelGeneration(shot) {
     renderStoryboard();
     if (error.status === 409) {
       saveStatus.textContent = "任务已开始生成";
-      showToast("任务已被 Codex 领取，无法取消", "error");
+      showToast("任务已被 Agent 领取，无法取消", "error");
       return;
     }
     saveStatus.textContent = "取消失败";
@@ -2268,33 +2601,39 @@ document.querySelector("#environment-check").addEventListener("click", async () 
   const summaryDetail = document.querySelector("#environment-summary-detail");
   const summaryDot = document.querySelector("#environment-summary-dot");
   summaryTitle.textContent = "检查中…";
-  summaryDetail.textContent = "正在读取本机依赖与会话能力";
+  summaryDetail.textContent = "正在检查配音服务、FFmpeg 和本机 Agent";
   summaryDot.dataset.status = "loading";
   results.replaceChildren();
   dialog.showModal();
   try {
     const result = await api("/api/environment");
-    const missing = result.checks.filter(check => check.status === "missing").length;
-    const session = result.checks.filter(check => check.status === "session").length;
-    summaryTitle.textContent = missing ? "有工具尚未就绪" : session ? "部分能力需要确认" : "环境已就绪";
-    summaryDetail.textContent = missing ? `${missing} 项本机依赖未检测到` : session ? "插件能力由当前 Codex 会话决定" : "本机依赖检查通过";
-    summaryDot.dataset.status = missing ? "missing" : session ? "session" : "ready";
-    results.replaceChildren(...result.checks.map(check => {
-      const row = document.createElement("div");
-      row.className = "environment-row";
-      row.dataset.status = check.status;
-      const heading = document.createElement("div");
-      heading.className = "environment-row-heading";
-      const name = document.createElement("strong");
-      name.textContent = check.name;
-      const state = document.createElement("span");
-      state.className = "environment-state";
-      state.textContent = ({ ready: "已就绪", missing: "未安装", session: "需确认" })[check.status];
-      heading.append(name, state);
-      const detail = document.createElement("small");
-      detail.textContent = check.detail;
-      row.append(heading, detail);
-      return row;
+    summaryTitle.textContent = result.summary.title;
+    summaryDetail.textContent = result.summary.detail;
+    summaryDot.dataset.status = result.summary.state === "ready" ? "ready" : "missing";
+    const stateLabel = { ready: "正常", missing: "需要处理", info: "未检测到" };
+    results.replaceChildren(...result.groups.map((group) => {
+      const section = document.createElement("section");
+      section.className = "environment-group";
+      const title = document.createElement("h3");
+      title.textContent = group.title;
+      section.append(title, ...group.items.map((item) => {
+        const row = document.createElement("div");
+        row.className = "environment-row";
+        row.dataset.status = item.status;
+        const heading = document.createElement("div");
+        heading.className = "environment-row-heading";
+        const name = document.createElement("strong");
+        name.textContent = item.name;
+        const state = document.createElement("span");
+        state.className = "environment-state";
+        state.textContent = stateLabel[item.status] || item.status;
+        heading.append(name, state);
+        const detail = document.createElement("small");
+        detail.textContent = item.detail;
+        row.append(heading, detail);
+        return row;
+      }));
+      return section;
     }));
   } catch (error) {
     summaryTitle.textContent = "检查失败";
@@ -2312,6 +2651,32 @@ document.querySelector("#back-home").addEventListener("click", () => navigate("/
 document.querySelector("#add-shot-top").addEventListener("click", addShot);
 document.querySelector("#present-project").addEventListener("click", openPresenter);
 document.querySelector("#copy-storyboard-prompt").addEventListener("click", copyStoryboardPrompt);
+document.querySelector("#fill-script-from-shots").addEventListener("click", fillScriptFromShots);
+document.querySelector("#open-cover-top").addEventListener("click", openCoverPanel);
+document.querySelector("#project-search").addEventListener("input", (event) => {
+  projectQuery = event.target.value.trim();
+  renderProjects();
+});
+document.querySelector("#shot-search").addEventListener("input", (event) => {
+  shotQuery = event.target.value;
+  if (project) applyShotFilter();
+});
+document.querySelectorAll("[data-density]").forEach((button) => {
+  button.addEventListener("click", () => {
+    density = button.dataset.density;
+    writePreference("codex-storyboard-density", density);
+    applyDensity();
+  });
+});
+document.querySelector("#task-chip").addEventListener("click", () => {
+  if (!project) return;
+  const order = ["failed", "processing", "pending"];
+  for (const status of order) {
+    const index = project.shots.findIndex((shot) => shot.generator !== "manual" && shot.generationStatus === status);
+    if (index >= 0) { activeProjectTab = "storyboard"; renderProjectTabs(); return focusShotRow(index); }
+  }
+  openCoverPanel();
+});
 scriptDraft.addEventListener("input", () => {
   if (!project) return;
   project.scriptDraft = scriptDraft.value;
@@ -2410,7 +2775,6 @@ document.querySelector("#remove-design").addEventListener("click", () => {
   removeDesignDialog.showModal();
 });
 document.querySelector("#open-media-folder").addEventListener("click", openMediaFolder);
-document.querySelector("#open-cover-panel").addEventListener("click", openCoverPanel);
 document.querySelector("#export-markdown").addEventListener("click", () => exportProject("markdown"));
 document.querySelector("#export-html").addEventListener("click", () => exportProject("html"));
 document.querySelector("#export-word").addEventListener("click", () => exportProject("word"));
@@ -2485,6 +2849,17 @@ lightbox.addEventListener("click", (event) => {
   if (event.target === lightbox || event.target === lightboxStage) closeLightbox();
 });
 document.addEventListener("keydown", (event) => {
+  if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown") && project) {
+    const row = event.target.closest?.(".shot-row");
+    const typing = event.target.matches?.("textarea, input");
+    // 文本框里 Alt+方向键用于移动光标，需要加 Ctrl 才当作调整顺序。
+    if (row && (!typing || event.ctrlKey)) {
+      event.preventDefault();
+      const from = project.shots.findIndex((shot) => shot.id === row.dataset.id);
+      reorderShots(from, from + (event.key === "ArrowUp" ? -1 : 1));
+      return;
+    }
+  }
   if (event.key === "Escape" && !designMenuPopover.hidden) {
     closeDesignMenu(true);
     designMenuTrigger.focus();
