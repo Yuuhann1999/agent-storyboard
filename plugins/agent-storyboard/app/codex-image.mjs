@@ -84,7 +84,7 @@ function macSystemProxyEnv() {
 
 function streamErrors(raw) {
   const errors = new Set();
-  const noise = (message) => message.includes("unrecognized configuration setting") || message.toLowerCase().includes("skill descriptions were shortened");
+  const noise = (message) => message.includes("unrecognized configuration setting") || message.includes("Model metadata for") || message.toLowerCase().includes("skill descriptions were shortened");
   for (const line of raw.split("\n")) {
     try {
       const event = JSON.parse(line.trim());
@@ -109,9 +109,10 @@ async function isImage(path) {
   return png || jpeg || webp;
 }
 
-function runCodex({ instruction, refImages, outputPath, timeoutMs, graceMs, pollMs, command }) {
+function runCodex({ instruction, refImages, outputPath, timeoutMs, graceMs, pollMs, command, model }) {
   return new Promise((resolvePromise, reject) => {
     const args = ["exec", "--json", "--sandbox", "danger-full-access", "--skip-git-repo-check"];
+    if (model) args.push("-m", model);
     for (const image of refImages) args.push("--image", image);
     args.push("-");
     const startedAt = Date.now();
@@ -179,6 +180,10 @@ function runCodex({ instruction, refImages, outputPath, timeoutMs, graceMs, poll
       if (timedOut) return reject(new ImageGenError("timeout", `Codex 生图超时（超过 ${Math.round(timeoutMs / 1000)} 秒）`));
       if (code !== 0) {
         const detail = streamErrors(stdout).join(" | ") || stderr.trim().slice(-300) || `退出码 ${code}`;
+        // 命令行 Codex 用 ChatGPT 账号时，config.toml 里的默认模型可能不被支持，交给上层换模型重试。
+        if (/not supported when using Codex with a ChatGPT account/.test(`${stdout}\n${stderr}`)) {
+          return reject(new ImageGenError("model_unsupported", `Codex 当前默认模型不支持 ChatGPT 账号：${detail}`));
+        }
         return reject(new ImageGenError("spawn_failed", `Codex 生图失败：${detail}`));
       }
       resolvePromise({ stdout });
@@ -197,7 +202,9 @@ export async function generateImageWithCodex({
   retries = 1,
   graceMs = 10_000,
   pollMs = 2000,
-  command = process.env.AGENT_STORYBOARD_CODEX || "codex"
+  command = process.env.AGENT_STORYBOARD_CODEX || "codex",
+  model = process.env.AGENT_STORYBOARD_CODEX_MODEL || "",
+  fallbackModel = "gpt-5.5"
 }) {
   if (!String(prompt || "").trim()) throw new ImageGenError("invalid_args", "缺少生图提示词", false);
   const output = isAbsolute(outputPath) ? outputPath : resolve(outputPath);
@@ -209,14 +216,21 @@ export async function generateImageWithCodex({
   const release = await acquireLock();
   try {
     let lastError;
+    let switchedModel = false;
     for (let attempt = 0; attempt <= retries; attempt++) {
       await rm(output, { force: true });
       try {
-        await runCodex({ instruction: buildInstruction({ prompt, outputPath: output, aspect, refImages: refs }), refImages: refs, outputPath: output, timeoutMs, graceMs, pollMs, command });
+        await runCodex({ instruction: buildInstruction({ prompt, outputPath: output, aspect, refImages: refs }), refImages: refs, outputPath: output, timeoutMs, graceMs, pollMs, command, model });
         if (!(await isImage(output))) throw new ImageGenError("no_output", "Codex 已结束，但没有生成有效的图片文件");
         return { path: output, bytes: (await stat(output)).size };
       } catch (error) {
         lastError = error;
+        if (error instanceof ImageGenError && error.kind === "model_unsupported" && !switchedModel && model !== fallbackModel) {
+          switchedModel = true;
+          model = fallbackModel;
+          attempt--; // 换模型重试不占用普通重试次数
+          continue;
+        }
         if (!(error instanceof ImageGenError) || !error.retryable || attempt === retries) break;
       }
     }

@@ -63,3 +63,18 @@ test("rejects unsafe paths and a missing Codex CLI", async () => {
   await assert.rejects(generateImageWithCodex({ prompt: "fox", outputPath: "/tmp/a;rm -rf.png" }), (error) => error.kind === "invalid_args");
   await assert.rejects(generateImageWithCodex({ prompt: "fox", outputPath: join(tmpdir(), "agent-storyboard-none.png"), command: "/nonexistent/codex", retries: 0 }), (error) => error.kind === "codex_not_installed");
 });
+
+test("switches to the fallback model when the default one is not supported by the account", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "agent-storyboard-img-"));
+  try {
+    const command = await fakeCodex(dir, `
+      const args = process.argv.slice(2);
+      if (!args.includes("-m")) { console.log(JSON.stringify({ type: "error", message: "The 'x' model is not supported when using Codex with a ChatGPT account." })); process.exit(1); }
+      fs.writeFileSync(out, png);`);
+    const result = await generateImageWithCodex({ prompt: "fox", outputPath: join(dir, "m.png"), command, retries: 0, pollMs: 50, fallbackModel: "gpt-5.5" });
+    assert.ok(result.bytes > 1000);
+    // 备用模型也不行时给出明确原因，而不是无限重试
+    const alwaysBad = await fakeCodex(dir, `console.log(JSON.stringify({ type: "error", message: "not supported when using Codex with a ChatGPT account" })); process.exit(1);`);
+    await assert.rejects(generateImageWithCodex({ prompt: "fox", outputPath: join(dir, "n.png"), command: alwaysBad, retries: 0, pollMs: 50 }), /默认模型不支持/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

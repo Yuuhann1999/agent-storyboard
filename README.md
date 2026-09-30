@@ -213,6 +213,7 @@ AGENT_STORYBOARD_PORT          端口，默认 43218
 AGENT_STORYBOARD_FFMPEG        FFmpeg 路径（同理 _FFPROBE、_WHISPER、_WHISPER_MODEL）
 AGENT_STORYBOARD_VOXCPM_URL    自建配音服务地址
 AGENT_STORYBOARD_CODEX         Codex CLI 路径
+AGENT_STORYBOARD_CODEX_MODEL   生图时指定 Codex 模型（默认沿用 Codex 配置；若该模型不支持 ChatGPT 账号，会自动改用 gpt-5.5 重试）
 ```
 
 </details>
