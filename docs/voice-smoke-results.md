@@ -1,5 +1,7 @@
 # Voice smoke test - 2026-09-14
 
+> 历史记录：以下结果来自旧版 Python / gradio_client 实现，保留当时的测试环境与结论。当前客户端已改为纯 Node.js；调用方法和当前依赖见 [配音运行说明](voice-runtime.md)。这些结果不代表当前版本已通过在线实测。
+
 Environment: Windows, Python 3.12.10 (isolated voice venv), gradio_client 2.7.0,
 Whisper.cpp 1.9.2 CPU, multilingual large-v3-turbo Q5_0 local model.
 

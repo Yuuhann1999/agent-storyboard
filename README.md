@@ -184,7 +184,7 @@ flowchart LR
 
 ## 🔧 环境与依赖
 
-不需要 Python。设置里的「环境检查」只列真正需要关心的项目：
+不需要 Python。VoxCPM 独立调用示例、参考音频参数和配音依赖见 [配音运行说明](docs/voice-runtime.md)。设置里的「环境检查」只列真正需要关心的项目：
 
 <table>
 <tr>
@@ -212,7 +212,7 @@ AGENT_STORYBOARD_DATA_DIR      数据目录
 AGENT_STORYBOARD_PORT          端口，默认 43218
 AGENT_STORYBOARD_FFMPEG        FFmpeg 路径（同理 _FFPROBE、_WHISPER、_WHISPER_MODEL）
 AGENT_STORYBOARD_VOXCPM_URL    自建配音服务地址
-AGENT_STORYBOARD_VOICE_CHUNK_CHARS  配音每段最多多少字（默认 800）。越大接缝越少但音色越容易后段偏移，越小越稳但接缝越多
+AGENT_STORYBOARD_VOICE_CHUNK_CHARS  配音分段目标字数（默认 800，按句尾切分，非严格上限）。越大接缝越少但音色越容易后段偏移，越小越稳但接缝越多
 AGENT_STORYBOARD_CODEX         Codex CLI 路径
 AGENT_STORYBOARD_CODEX_MODEL   生图时指定 Codex 模型（默认沿用 Codex 配置；若该模型不支持 ChatGPT 账号，会自动改用 gpt-5.5 重试）
 ```
