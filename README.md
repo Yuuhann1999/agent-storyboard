@@ -22,7 +22,8 @@
   <a href="#-功能一览">功能</a> ·
   <a href="#-环境与依赖">环境</a> ·
   <a href="#-mcp-工具">MCP 工具</a> ·
-  <a href="#-开发">开发</a>
+  <a href="#-开发">开发</a> ·
+  <a href="#社区方案">社区方案</a>
 </p>
 
 </div>
@@ -331,6 +332,10 @@ POST   /api/generation/tasks/:taskId/claim  complete / fail / cancel / heartbeat
 ```
 
 </details>
+
+## 社区方案
+
+- [ToAPIs 图片/视频外部生成与任务回填（社区方案）](https://github.com/ToAPIs-2025/lower-cost-agent-storyboard-toapis/blob/main/README_zh-CN.md)：由 ToAPIs 第三方维护，与本项目无关；使用及计费问题请联系 ToAPIs 团队。
 
 ## License
 
